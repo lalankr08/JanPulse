@@ -7,7 +7,7 @@ import { addLocalHistoryItem } from '@/lib/historyStore';
 import { 
   FileText, Calendar, Users, AlertTriangle, CheckSquare, 
   ArrowRight, Loader2, Link2, ExternalLink, ShieldCheck, Clock,
-  Upload, X, CheckCircle2, FileCode, Check, ChevronDown, ChevronUp, Sparkles
+  Upload, X, CheckCircle2, FileCode, Check, ChevronDown, ChevronUp, Search
 } from 'lucide-react';
 
 export default function ExplainNotificationPage() {
@@ -27,6 +27,7 @@ export default function ExplainNotificationPage() {
     window.addEventListener('janpulse_language_changed', handleLangChange);
     return () => window.removeEventListener('janpulse_language_changed', handleLangChange);
   }, []);
+
   const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
   const [urlOrText, setUrlOrText] = useState('');
   
@@ -42,6 +43,9 @@ export default function ExplainNotificationPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentStepMessage, setCurrentStepMessage] = useState<string>('');
   const [result, setResult] = useState<any>(null);
+
+  // Search filter inside Who is Affected
+  const [affectedSearch, setAffectedSearch] = useState<string>('');
 
   // Handle Document Selection and Python Extraction
   const handleFileSelect = async (file: File) => {
@@ -91,6 +95,7 @@ export default function ExplainNotificationPage() {
 
     setIsLoading(true);
     setResult(null);
+    setAffectedSearch('');
     setCurrentStepMessage('Parsing gazette order and regulatory text...');
 
     try {
@@ -127,6 +132,11 @@ export default function ExplainNotificationPage() {
       setCurrentStepMessage('');
     }
   };
+
+  // Filtered affected groups based on search input
+  const filteredAffected = (result?.who_is_affected || []).filter((w: string) =>
+    !affectedSearch.trim() || w.toLowerCase().includes(affectedSearch.toLowerCase().trim())
+  );
 
   return (
     <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]">
@@ -188,56 +198,66 @@ export default function ExplainNotificationPage() {
                   <div className="flex items-center justify-between gap-3 mb-2">
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-10 h-10 rounded-xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center shrink-0">
-                        <FileText className="w-5 h-5" />
+                        <FileCode className="w-5 h-5" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[#1D1D1F] truncate">
+                        <h4 className="text-sm font-semibold text-[#1D1D1F] truncate">
                           {selectedFile.name}
-                        </p>
-                        <p className="text-xs text-[#86868B] font-mono">
-                          {(selectedFile.size / 1024).toFixed(1)} KB • {selectedFile.name.split('.').pop()?.toUpperCase()}
-                        </p>
+                        </h4>
+                        <div className="flex items-center gap-2 text-xs text-[#86868B] mt-0.5">
+                          <span>{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                          {docMeta && (
+                            <>
+                              <span>&bull;</span>
+                              <span>{docMeta.pages} {docMeta.pages === 1 ? 'page' : 'pages'}</span>
+                              <span>&bull;</span>
+                              <span>~{docMeta.word_count.toLocaleString()} words</span>
+                              <span className="uppercase text-[10px] font-bold bg-black/[0.06] px-1.5 py-0.5 rounded">
+                                {docMeta.doc_type}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
                     <button
                       type="button"
                       onClick={handleRemoveFile}
-                      className="p-1.5 text-[#86868B] hover:text-[#FF3B30] hover:bg-black/[0.04] rounded-full transition-colors shrink-0"
+                      className="p-1.5 text-[#86868B] hover:text-[#FF3B30] hover:bg-black/[0.04] rounded-full transition-colors"
                       title="Remove file"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
 
-                  {/* Extraction Status */}
                   {isExtractingDoc ? (
-                    <div className="flex items-center gap-2 text-xs font-semibold text-[#0071E3] bg-white p-3 rounded-xl border border-black/[0.04] mt-3 animate-fadeIn">
-                      <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                      <span>Parsing document with Python pypdf & docx parsers...</span>
+                    <div className="flex items-center gap-2 text-xs text-[#0071E3] pt-3 border-t border-black/[0.06] mt-3">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Parsing document structure and tables...</span>
                     </div>
-                  ) : docMeta ? (
-                    <div className="space-y-3 mt-3">
-                      <div className="flex items-center justify-between bg-white px-3.5 py-2.5 rounded-xl border border-black/[0.04] text-xs font-medium text-[#248A3D]">
-                        <div className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Extracted successfully • {docMeta.pages} page(s) • {docMeta.word_count.toLocaleString()} words</span>
-                        </div>
+                  ) : extractedDocText ? (
+                    <div className="pt-3 border-t border-black/[0.06] mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-[#248A3D] font-medium flex items-center gap-1.5">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Document text extracted successfully</span>
+                        </span>
+
                         <button
                           type="button"
                           onClick={() => setShowPreviewText(!showPreviewText)}
-                          className="text-[#0071E3] hover:underline flex items-center gap-1 font-semibold"
+                          className="text-xs font-semibold text-[#0071E3] hover:underline flex items-center gap-1"
                         >
-                          <span>{showPreviewText ? 'Hide text' : 'Inspect text'}</span>
-                          {showPreviewText ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          <span>{showPreviewText ? 'Hide extracted text' : 'Preview text'}</span>
+                          {showPreviewText ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                         </button>
                       </div>
 
-                      {/* Collapsible Text Preview */}
                       {showPreviewText && (
-                        <div className="bg-white p-4 rounded-xl border border-black/[0.04] max-h-48 overflow-y-auto text-xs text-[#1D1D1F] font-mono leading-relaxed whitespace-pre-wrap animate-fadeIn">
-                          {extractedDocText.slice(0, 2000)}
-                          {extractedDocText.length > 2000 && "\n\n[... Remaining content parsed and ready for analysis ...]"}
+                        <div className="mt-3 bg-white border border-black/[0.06] rounded-xl p-3.5 text-xs text-[#48484A] max-h-48 overflow-y-auto font-mono whitespace-pre-wrap leading-relaxed">
+                          {extractedDocText.slice(0, 3000)}
+                          {extractedDocText.length > 3000 && "\n\n... [truncated preview] ..."}
                         </div>
                       )}
                     </div>
@@ -246,16 +266,18 @@ export default function ExplainNotificationPage() {
               ) : (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-black/[0.1] hover:border-[#0071E3] transition-colors rounded-2xl p-8 text-center bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] cursor-pointer group"
+                  className="border-2 border-dashed border-black/[0.1] hover:border-[#0071E3]/60 bg-[#F5F5F7]/40 hover:bg-[#F5F5F7] rounded-3xl p-8 sm:p-10 text-center cursor-pointer transition-all duration-200 group"
                 >
-                  <Upload className="w-8 h-8 mx-auto text-[#86868B] group-hover:text-[#0071E3] transition-colors mb-2.5" />
-                  <p className="text-sm font-semibold text-[#1D1D1F]">
-                    Upload Official Gazette, Notification, or Circular
+                  <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto mb-3.5 group-hover:scale-105 transition-transform duration-200">
+                    <Upload className="w-6 h-6 stroke-[2]" />
+                  </div>
+                  <h3 className="text-sm font-bold text-[#1D1D1F] mb-1">
+                    Upload official gazette or regulatory file
+                  </h3>
+                  <p className="text-xs text-[#86868B] mb-3">
+                    Drag and drop or click to browse files from your computer.
                   </p>
-                  <p className="text-xs text-[#86868B] mt-1">
-                    Supports PDF (.pdf), Microsoft Word (.docx, .doc), or Text files.
-                  </p>
-                  <div className="flex items-center justify-center gap-2 mt-4">
+                  <div className="flex items-center justify-center gap-2">
                     <span className="px-2.5 py-1 text-[11px] font-semibold bg-white border border-black/[0.06] rounded-md text-[#6E6E73]">
                       .PDF
                     </span>
@@ -345,6 +367,7 @@ export default function ExplainNotificationPage() {
         {result && (
           <div className="space-y-6 animate-fadeIn">
             <div className="bg-white border border-black/[0.06] rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+              {/* Plain-Language Header */}
               <div className="border-b border-black/[0.06] pb-5 mb-6">
                 <span className="text-xs font-semibold text-[#0071E3] uppercase tracking-wider">
                   Plain-Language Summary
@@ -362,91 +385,130 @@ export default function ExplainNotificationPage() {
                       Effective Date: {result.effective_date}
                     </span>
                   )}
-                  {result.is_rag_used && (
-                    <span className="flex items-center gap-1.5 font-semibold text-[#248A3D] bg-[#34C759]/10 border border-[#34C759]/20 px-2.5 py-0.5 rounded-full">
-                      <Sparkles className="w-3.5 h-3.5 text-[#34C759]" />
-                      <span>
-                        RAG Indexed &bull; Clauses from Pages {result.pages_cited?.slice(0, 6).join(', ')}{result.pages_cited && result.pages_cited.length > 6 ? '...' : ''} of {result.total_pages} Pages
-                      </span>
-                    </span>
-                  )}
                 </div>
               </div>
 
-              {/* Bento breakdown */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                {/* Who is affected */}
-                <div className="bg-[#F5F5F7] border border-black/[0.04] rounded-2xl p-5">
-                  <h3 className="font-semibold text-sm text-[#1D1D1F] mb-2.5 flex items-center gap-2">
-                    <Users className="w-4 h-4 text-[#0071E3]" />
-                    <span>Who is affected:</span>
-                  </h3>
-                  <ul className="list-disc list-inside text-xs text-[#6E6E73] space-y-1.5 leading-relaxed">
-                    {result.who_is_affected?.map((w: string, i: number) => (
-                      <li key={i}>{w}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* What changes */}
-                <div className="bg-[#F5F5F7] border border-black/[0.04] rounded-2xl p-5">
-                  <h3 className="font-semibold text-sm text-[#1D1D1F] mb-2.5 flex items-center gap-2">
+              {/* 1. What Changes Section */}
+              {result.what_changes && result.what_changes.length > 0 && (
+                <div className="bg-[#F5F5F7] border border-black/[0.04] rounded-2xl p-5 mb-5">
+                  <h3 className="font-semibold text-sm text-[#1D1D1F] mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-[#0071E3]" />
-                    <span>What changes:</span>
+                    <span>What Changes & Key Policy Provisions:</span>
                   </h3>
-                  <ul className="list-disc list-inside text-xs text-[#6E6E73] space-y-1.5 leading-relaxed">
-                    {result.what_changes?.map((c: string, i: number) => (
+                  <ul className="list-disc list-inside text-xs sm:text-sm text-[#48484A] space-y-2 leading-relaxed">
+                    {result.what_changes.map((c: string, i: number) => (
                       <li key={i}>{c}</li>
                     ))}
                   </ul>
                 </div>
-              </div>
+              )}
 
-              {/* Deadlines & Penalties */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
-                {result.deadlines && result.deadlines.length > 0 && (
-                  <div className="bg-[#FF9500]/10 border border-[#FF9500]/20 rounded-2xl p-5 text-[#B25000]">
-                    <h3 className="font-semibold text-sm mb-2.5 flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      <span>Deadlines & Milestones:</span>
-                    </h3>
-                    <ul className="list-disc list-inside text-xs space-y-1.5 leading-relaxed">
-                      {result.deadlines.map((d: string, i: number) => (
-                        <li key={i}>{d}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {result.penalties_or_actions && result.penalties_or_actions.length > 0 && (
-                  <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-2xl p-5 text-[#D70015]">
-                    <h3 className="font-semibold text-sm mb-2.5 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span>Penalties or Consequences:</span>
-                    </h3>
-                    <ul className="list-disc list-inside text-xs space-y-1.5 leading-relaxed">
-                      {result.penalties_or_actions.map((p: string, i: number) => (
-                        <li key={i}>{p}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Action items */}
-              {result.what_to_do_next && result.what_to_do_next.length > 0 && (
-                <div className="bg-[#34C759]/10 border border-[#34C759]/20 rounded-2xl p-5 text-[#248A3D]">
+              {/* 2. Deadlines & Milestones */}
+              {result.deadlines && result.deadlines.length > 0 && (
+                <div className="bg-[#FF9500]/10 border border-[#FF9500]/20 rounded-2xl p-5 mb-5 text-[#B25000]">
                   <h3 className="font-semibold text-sm mb-2.5 flex items-center gap-2">
-                    <CheckSquare className="w-4 h-4" />
-                    <span>What to do next:</span>
+                    <Clock className="w-4 h-4" />
+                    <span>Deadlines & Milestones:</span>
                   </h3>
-                  <ol className="list-decimal list-inside text-xs space-y-1.5 leading-relaxed">
-                    {result.what_to_do_next.map((act: string, i: number) => (
-                      <li key={i}>{act}</li>
+                  <ul className="list-disc list-inside text-xs sm:text-sm space-y-1.5 leading-relaxed">
+                    {result.deadlines.map((d: string, i: number) => (
+                      <li key={i}>{d}</li>
                     ))}
-                  </ol>
+                  </ul>
                 </div>
               )}
+
+              {/* 3. Split Layout: Who is Affected (with Search) on Left vs. Penalties & What to do next on Right */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* Left Side (7 cols): Who is Affected with Search bar */}
+                <div className="lg:col-span-7 bg-[#F5F5F7] border border-black/[0.04] rounded-2xl p-5 flex flex-col">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="font-semibold text-sm text-[#1D1D1F] flex items-center gap-2">
+                      <Users className="w-4 h-4 text-[#0071E3]" />
+                      <span>Who is Affected ({result.who_is_affected?.length || 0} categories):</span>
+                    </h3>
+                    {result.who_is_affected && result.who_is_affected.length > 0 && (
+                      <span className="text-[11px] font-medium text-[#86868B]">
+                        {filteredAffected.length} of {result.who_is_affected.length} shown
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Search Button & Input */}
+                  <div className="relative mb-3.5">
+                    <Search className="w-3.5 h-3.5 text-[#86868B] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={affectedSearch}
+                      onChange={(e) => setAffectedSearch(e.target.value)}
+                      placeholder="Search categories (e.g. farmers, businesses, students)..."
+                      className="w-full bg-white border border-black/[0.08] focus:border-[#0071E3] rounded-xl pl-9 pr-8 py-2 text-xs text-[#1D1D1F] placeholder:text-[#86868B] outline-none transition-all shadow-apple-sm"
+                    />
+                    {affectedSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setAffectedSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#86868B] hover:text-[#1D1D1F] p-0.5"
+                        title="Clear search"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Scrollable list of affected categories */}
+                  <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {filteredAffected.length > 0 ? (
+                      filteredAffected.map((w: string, i: number) => (
+                        <div
+                          key={i}
+                          className="bg-white/80 border border-black/[0.04] rounded-xl p-3 text-xs sm:text-sm text-[#48484A] leading-relaxed flex items-start gap-2.5"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#0071E3] shrink-0 mt-2" />
+                          <span>{w}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="bg-white/60 rounded-xl p-5 text-center text-xs text-[#86868B]">
+                        No categories matching &ldquo;{affectedSearch}&rdquo; in this notification.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Side (5 cols): Penalties & What to do next */}
+                <div className="lg:col-span-5 space-y-4">
+                  {/* Penalties or Consequences */}
+                  {result.penalties_or_actions && result.penalties_or_actions.length > 0 && (
+                    <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-2xl p-5 text-[#D70015]">
+                      <h3 className="font-semibold text-sm mb-2.5 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>Penalties or Consequences:</span>
+                      </h3>
+                      <ul className="list-disc list-inside text-xs sm:text-sm space-y-1.5 leading-relaxed">
+                        {result.penalties_or_actions.map((p: string, i: number) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* What to do next */}
+                  {result.what_to_do_next && result.what_to_do_next.length > 0 && (
+                    <div className="bg-[#34C759]/10 border border-[#34C759]/20 rounded-2xl p-5 text-[#248A3D]">
+                      <h3 className="font-semibold text-sm mb-2.5 flex items-center gap-2">
+                        <CheckSquare className="w-4 h-4 shrink-0" />
+                        <span>What to do next:</span>
+                      </h3>
+                      <ol className="list-decimal list-inside text-xs sm:text-sm space-y-1.5 leading-relaxed">
+                        {result.what_to_do_next.map((act: string, i: number) => (
+                          <li key={i}>{act}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}

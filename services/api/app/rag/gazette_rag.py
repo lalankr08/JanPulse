@@ -245,3 +245,4 @@ def process_gazette_with_rag(
         "pages_cited": sorted(list(pages_cited)),
         "total_pages": total_pages
     }
+
