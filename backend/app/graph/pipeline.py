@@ -521,7 +521,7 @@ Evidence & Operative Clauses (Extracted via Gazette RAG):
                     if cid in state.chunks_by_id:
                         top_chunks.append(state.chunks_by_id[cid])
 
-            unique_chunks = {c["chunk_id"]: c for c in top_chunks + state.retrieved_chunks[:6]}.values()
+            unique_chunks = list({c["chunk_id"]: c for c in top_chunks + state.retrieved_chunks[:6]}.values())
             yield {"type": "step_complete", "node": "rank", "selected_chunks": len(unique_chunks)}
 
             # Node 6: Judge
