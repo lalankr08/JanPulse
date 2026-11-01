@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { BackendWarmer } from '@/components/BackendWarmer';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://janpulse.lalankr.in'),
@@ -52,6 +53,9 @@ export default function RootLayout({
             </div>
           </div>
         </footer>
+
+        {/* Background health ping & status indicator */}
+        <BackendWarmer />
       </body>
     </html>
   );
