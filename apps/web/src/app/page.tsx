@@ -56,6 +56,18 @@ export default function HomePage() {
   useEffect(() => {
     setRecentHistory(getLocalHistory());
 
+    if (typeof window !== 'undefined') {
+      const savedLang = localStorage.getItem('janpulse_language');
+      if (savedLang && (savedLang === 'en' || savedLang === 'hi')) {
+        setLanguage(savedLang);
+      }
+    }
+
+    const handleLangChange = (e: any) => {
+      if (e.detail) setLanguage(e.detail);
+    };
+    window.addEventListener('janpulse_language_changed', handleLangChange);
+
     const pref = getAuthPreference();
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       setUser(user);
@@ -96,6 +108,7 @@ export default function HomePage() {
 
     return () => {
       authListener.subscription.unsubscribe();
+      window.removeEventListener('janpulse_language_changed', handleLangChange);
     };
   }, []);
 

@@ -7,11 +7,26 @@ import { addLocalHistoryItem } from '@/lib/historyStore';
 import { 
   FileText, Calendar, Users, AlertTriangle, CheckSquare, 
   ArrowRight, Loader2, Link2, ExternalLink, ShieldCheck, Clock,
-  Upload, X, CheckCircle2, FileCode, Check, ChevronDown, ChevronUp
+  Upload, X, CheckCircle2, FileCode, Check, ChevronDown, ChevronUp, Sparkles
 } from 'lucide-react';
 
 export default function ExplainNotificationPage() {
   const [language, setLanguage] = useState('en');
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedLang = localStorage.getItem('janpulse_language');
+      if (savedLang && (savedLang === 'en' || savedLang === 'hi')) {
+        setLanguage(savedLang);
+      }
+    }
+
+    const handleLangChange = (e: any) => {
+      if (e.detail) setLanguage(e.detail);
+    };
+    window.addEventListener('janpulse_language_changed', handleLangChange);
+    return () => window.removeEventListener('janpulse_language_changed', handleLangChange);
+  }, []);
   const [activeTab, setActiveTab] = useState<'upload' | 'paste'>('upload');
   const [urlOrText, setUrlOrText] = useState('');
   
@@ -345,6 +360,14 @@ export default function ExplainNotificationPage() {
                     <span className="flex items-center gap-1 font-semibold text-[#1D1D1F] bg-[#0071E3]/10 text-[#0071E3] px-2.5 py-0.5 rounded-full">
                       <Calendar className="w-3.5 h-3.5" />
                       Effective Date: {result.effective_date}
+                    </span>
+                  )}
+                  {result.is_rag_used && (
+                    <span className="flex items-center gap-1.5 font-semibold text-[#248A3D] bg-[#34C759]/10 border border-[#34C759]/20 px-2.5 py-0.5 rounded-full">
+                      <Sparkles className="w-3.5 h-3.5 text-[#34C759]" />
+                      <span>
+                        RAG Indexed &bull; Clauses from Pages {result.pages_cited?.slice(0, 6).join(', ')}{result.pages_cited && result.pages_cited.length > 6 ? '...' : ''} of {result.total_pages} Pages
+                      </span>
                     </span>
                   )}
                 </div>

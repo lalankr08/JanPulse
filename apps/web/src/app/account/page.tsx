@@ -86,6 +86,18 @@ export default function AccountPage() {
   useEffect(() => {
     loadData();
 
+    if (typeof window !== 'undefined') {
+      const savedLang = localStorage.getItem('janpulse_language');
+      if (savedLang && (savedLang === 'en' || savedLang === 'hi')) {
+        setLanguage(savedLang);
+      }
+    }
+
+    const handleLangChange = (e: any) => {
+      if (e.detail) setLanguage(e.detail);
+    };
+    window.addEventListener('janpulse_language_changed', handleLangChange);
+
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       loadData();
@@ -93,6 +105,7 @@ export default function AccountPage() {
 
     return () => {
       authListener.subscription.unsubscribe();
+      window.removeEventListener('janpulse_language_changed', handleLangChange);
     };
   }, []);
 

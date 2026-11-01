@@ -14,12 +14,8 @@ interface NavbarProps {
 }
 
 const LANGUAGES = [
-  { code: 'en', label: 'EN' },
-  { code: 'hi', label: 'HI' },
-  { code: 'ta', label: 'TA' },
-  { code: 'te', label: 'TE' },
-  { code: 'bn', label: 'BN' },
-  { code: 'mr', label: 'MR' },
+  { code: 'en', label: 'English' },
+  { code: 'hi', label: 'हिन्दी' },
 ];
 
 export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
@@ -40,6 +36,14 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
   useEffect(() => {
     refreshUser();
 
+    // Sync saved language from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('janpulse_language');
+      if (saved && (saved === 'en' || saved === 'hi') && saved !== language) {
+        setLanguage(saved);
+      }
+    }
+
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
@@ -48,6 +52,14 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  const handleLanguageChange = (code: string) => {
+    setLanguage(code);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('janpulse_language', code);
+      window.dispatchEvent(new CustomEvent('janpulse_language_changed', { detail: code }));
+    }
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -76,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
           </span>
         </Link>
 
-        {/* Desktop Links (Apple-style segmented navigation) */}
+        {/* Desktop Links */}
         <nav className="hidden md:flex items-center gap-1 bg-black/[0.03] p-1 rounded-full border border-black/[0.04]">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
@@ -96,16 +108,16 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
           })}
         </nav>
 
-        {/* Right side controls: Language switcher + Auth + Mobile toggle */}
+        {/* Right side controls: English / Hindi Switcher + Auth + Mobile toggle */}
         <div className="flex items-center gap-2">
           {/* Segmented language capsule */}
           <div className="flex items-center bg-black/[0.04] p-0.5 rounded-full border border-black/[0.04]">
-            {LANGUAGES.slice(0, 3).map((l) => (
+            {LANGUAGES.map((l) => (
               <button
                 key={l.code}
                 type="button"
-                onClick={() => setLanguage(l.code)}
-                className={`px-2.5 py-1 text-[11px] rounded-full transition-all ${
+                onClick={() => handleLanguageChange(l.code)}
+                className={`px-3 py-1 text-xs rounded-full transition-all ${
                   language === l.code
                     ? 'bg-white text-[#1D1D1F] font-semibold shadow-[0_1px_3px_rgba(0,0,0,0.1)]'
                     : 'text-[#6E6E73] hover:text-[#1D1D1F]'

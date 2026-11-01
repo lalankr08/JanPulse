@@ -63,7 +63,7 @@ CRITICAL RULES:
 
 3. Whenever you debunk a rumor as contradicted:
    - Your `explanation` MUST plainly state that the claim is false AND clearly state what the accurate real fact is from official public records.
-"""
+""" + ("\n4. LANGUAGE REQUIREMENT: Write your `explanation` and `correct_official_fact` in clear, natural Hindi (Devanagari script: हिन्दी) for Indian citizens." if state.target_language == "hi" else "")
             try:
                 hoax_eval, h_model = router.complete_structured(
                     prompt=hoax_prompt,
@@ -248,7 +248,10 @@ CRITICAL RULES:
                     )
                     source_id = str(saved["id"])
 
+                    scheme_lang_note = "\nIMPORTANT: Output all questions (`question_for_user`), required documents, application steps, and guidance disclaimer in clear, natural Hindi (Devanagari script: हिन्दी) for Indian citizens." if state.target_language == "hi" else ""
                     crit_prompt = f"""Extract eligibility conditions, required documents, and steps from this official scheme text:
+{scheme_lang_note}
+
 {scheme_data['content']}
 """
                     extraction, model_used = router.complete_structured(
@@ -290,9 +293,10 @@ CRITICAL RULES:
             # Explaining a gazette or notification PDF / URL
             yield {"type": "step_start", "node": "fetch_notification", "message": "Parsing gazette order and regulatory text..."}
             from app.tools.egazette import fetch_and_parse_pdf
+            from app.rag.gazette_rag import process_gazette_with_rag
             
             try:
-                pdf_data = fetch_and_parse_pdf(state.raw_input)
+                pdf_data = fetch_and_parse_pdf(state.raw_input, max_pages=100)
             except Exception as e:
                 print(f"[Pipeline] Notification fetch warning: {e}")
                 pdf_data = {
@@ -303,11 +307,56 @@ CRITICAL RULES:
                 }
 
             notification_content = (pdf_data.get("content") or "").strip() or state.raw_input
-            
-            yield {"type": "step_start", "node": "analyze_notification", "message": "Analyzing policy changes, deadlines, and affected groups..."}
+            total_chars = len(notification_content)
+            approx_pages = pdf_data.get("total_pages") or max(1, notification_content.count("--- Page") or total_chars // 2200)
 
+            # Save source if authenticated or database is available for pgvector indexing
+            source_id = None
+            if state.persist_to_db:
+                try:
+                    src_rec = Database.save_source(
+                        url=pdf_data.get("url", "https://egazette.gov.in"),
+                        publisher=pdf_data.get("publisher", "The Gazette of India (e-Gazette)"),
+                        source_type="egazette",
+                        title=pdf_data.get("title", "Government Gazette Notification"),
+                        http_status=200,
+                        raw_text=notification_content[:100000]
+                    )
+                    source_id = str(src_rec["id"]) if src_rec else None
+                except Exception as src_err:
+                    source_id = None
+
+            # Check if Gazette RAG is activated for large document
+            if total_chars > 10000 or approx_pages > 3:
+                yield {
+                    "type": "step_start",
+                    "node": "gazette_rag_chunking",
+                    "message": f"Large gazette detected ({approx_pages} pages, {total_chars:,} chars). Indexing clauses with RAG..."
+                }
+
+            rag_result = process_gazette_with_rag(
+                full_text=notification_content,
+                source_url=pdf_data.get("url", "https://egazette.gov.in"),
+                source_id=source_id,
+                max_total_context_chars=16000
+            )
+
+            if rag_result.get("is_rag_used"):
+                pages_cited_str = ", ".join(str(p) for p in rag_result.get("pages_cited", [])[:8])
+                yield {
+                    "type": "step_start",
+                    "node": "gazette_rag_retrieval",
+                    "message": f"Extracted operative clauses across pages {pages_cited_str} (Scope, Amendments, Deadlines, Penalties)..."
+                }
+
+            yield {"type": "step_start", "node": "analyze_notification", "message": "Synthesizing plain-language civic breakdown..."}
+
+            gazette_lang_note = "\nIMPORTANT: Output the explanation entirely in clear, natural Hindi (Devanagari script: हिन्दी) for Indian citizens. Output the title, who is affected, what changes, deadlines, penalties, and what to do next in clear Hindi." if state.target_language == "hi" else ""
             exp_prompt = f"""Explain this official government gazette / notification clearly for citizens:
-{notification_content[:15000]}
+{gazette_lang_note}
+
+Evidence & Operative Clauses (Extracted via Gazette RAG):
+{rag_result['context']}
 """
             try:
                 explainer_result, model_used = router.complete_structured(
@@ -343,7 +392,12 @@ CRITICAL RULES:
                 "penalties_or_actions": explainer_result.penalties_or_actions,
                 "what_to_do_next": explainer_result.what_to_do_next,
                 "source_url": pdf_data.get("url", "https://egazette.gov.in"),
-                "publisher": pdf_data.get("publisher", "The Gazette of India (e-Gazette)")
+                "publisher": pdf_data.get("publisher", "The Gazette of India (e-Gazette)"),
+                "is_rag_used": rag_result.get("is_rag_used", False),
+                "total_pages": rag_result.get("total_pages", approx_pages),
+                "pages_cited": rag_result.get("pages_cited", [1]),
+                "total_chunks_indexed": rag_result.get("total_chunks", 1),
+                "chunks_analyzed": rag_result.get("chunks_selected", 1)
             }
             return
 
@@ -483,7 +537,24 @@ Official Evidence Chunks:
                 yield {"type": "replan", "reason": "Verification gaps found, launching targeted follow-up search..."}
 
         # Node 8: Explain & Translate
-        yield {"type": "step_start", "node": "explain", "message": f"Formatting explanation in {state.target_language}..."}
+        yield {"type": "step_start", "node": "explain", "message": f"Formatting explanation in {'Hindi' if state.target_language == 'hi' else 'English'}..."}
+
+        if state.target_language == "hi":
+            for v in state.verdicts:
+                try:
+                    trans_prompt = f"""Translate this fact-check explanation into clear, natural Hindi (Devanagari script: हिन्दी) for an Indian citizen.
+Keep all names, official schemes, dates, amounts, and facts exact without adding external commentary:
+
+{v.explanation}"""
+                    hi_expl = router.complete(
+                        prompt=trans_prompt,
+                        system_prompt="You are a professional Hindi translator for Indian government records and civic fact-checking.",
+                        preferred_model_tier="fast"
+                    )
+                    if hi_expl and len(hi_expl.strip()) > 5:
+                        v.explanation = hi_expl.strip()
+                except Exception as trans_err:
+                    print(f"[Pipeline] Hindi translation note: {trans_err}")
         
         final_verdicts_data = []
         for v in state.verdicts:

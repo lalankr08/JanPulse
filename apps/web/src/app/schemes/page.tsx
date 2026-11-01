@@ -11,6 +11,21 @@ import {
 
 export default function SchemesPage() {
   const [language, setLanguage] = useState('en');
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedLang = localStorage.getItem('janpulse_language');
+      if (savedLang && (savedLang === 'en' || savedLang === 'hi')) {
+        setLanguage(savedLang);
+      }
+    }
+
+    const handleLangChange = (e: any) => {
+      if (e.detail) setLanguage(e.detail);
+    };
+    window.addEventListener('janpulse_language_changed', handleLangChange);
+    return () => window.removeEventListener('janpulse_language_changed', handleLangChange);
+  }, []);
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentStepMessage, setCurrentStepMessage] = useState('');

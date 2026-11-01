@@ -90,6 +90,47 @@ class ModelRouter:
 
         raise RuntimeError("No LLM client is configured or reachable")
 
+    def complete(
+        self,
+        prompt: str,
+        system_prompt: str = "",
+        preferred_model_tier: str = "fast"
+    ) -> str:
+        """
+        Text completion with Groq / Gemini fallback, used for translation and text adaptation.
+        """
+        groq_model = settings.GROQ_MODEL_FAST if preferred_model_tier == "fast" else settings.GROQ_MODEL_MAIN
+        if self.groq_client:
+            try:
+                response = self.groq_client.chat.completions.create(
+                    model=groq_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.2
+                )
+                res_text = response.choices[0].message.content or ""
+                if res_text.strip():
+                    return res_text.strip()
+            except Exception as e:
+                print(f"[ModelRouter] Groq complete fallback to Gemini: {e}")
+
+        if self.gemini_client:
+            try:
+                response = self.gemini_client.models.generate_content(
+                    model=settings.GEMINI_MODEL_LONG,
+                    contents=f"{system_prompt}\n\n{prompt}",
+                    config=types.GenerateContentConfig(temperature=0.2)
+                )
+                res_text = response.text or ""
+                if res_text.strip():
+                    return res_text.strip()
+            except Exception as e2:
+                print(f"[ModelRouter] Gemini complete error: {e2}")
+
+        return prompt
+
     def generate_embedding(self, text: str) -> list[float]:
         """
         Generates 768-dim embedding via Gemini.
