@@ -31,7 +31,7 @@ class Settings:
     GROQ_STT_MODEL: str = os.getenv("GROQ_STT_MODEL", "whisper-large-v3")
     GROQ_TTS_MODEL: str = os.getenv("GROQ_TTS_MODEL", "canopylabs/orpheus-v1-english")
     
-    GEMINI_MODEL_LONG: str = os.getenv("GEMINI_MODEL_LONG", "gemini-1.5-flash")
+    GEMINI_MODEL_LONG: str = os.getenv("GEMINI_MODEL_LONG", "models/gemini-3.8-flash")
     GEMINI_EMBED_MODEL: str = os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
     EMBED_DIM: int = int(os.getenv("EMBED_DIM", "768"))
     
