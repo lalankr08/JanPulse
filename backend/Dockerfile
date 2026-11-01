@@ -26,6 +26,6 @@ COPY migrations/ ./migrations/
 # Expose port (FastAPI default 8000 or custom $PORT)
 EXPOSE 8000
 
-# Run FastAPI with uvicorn
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Run FastAPI with uvicorn (multi-worker to prevent single-thread blocking)
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]
 

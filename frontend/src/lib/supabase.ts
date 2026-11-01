@@ -5,29 +5,46 @@ const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 
 function normalizeSupabaseUrl(raw?: string): string {
   let u = (raw || '').trim().replace(/^['"]|['"]$/g, '');
+  
+  // Security guard: If a postgresql:// database connection URI is mistakenly passed to the browser,
+  // NEVER use it directly (prevents leaking DB credentials in browser network requests)!
+  if (u.includes('postgresql:') || u.includes('postgres:') || u.includes('@') || u.includes(':5432') || u.includes(':6543')) {
+    console.error("[Supabase Security] Database connection string detected in NEXT_PUBLIC_SUPABASE_URL! Falling back to safe public HTTPS project endpoint.");
+    const match = u.match(/postgres\.([a-z0-9_-]+)/i);
+    if (match && match[1]) {
+      return `https://${match[1]}.supabase.co`;
+    }
+    return DEFAULT_SUPABASE_URL;
+  }
+
   if (!u || u.includes('<') || u.includes('your-project-ref')) {
     return DEFAULT_SUPABASE_URL;
   }
+
   if (!u.startsWith('http://') && !u.startsWith('https://')) {
     u = 'https://' + u;
   }
+
   try {
     const parsed = new URL(u);
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      return u;
+    // Must be a valid HTTP(S) URL without credentials
+    if ((parsed.protocol === 'https:' || parsed.protocol === 'http:') && !parsed.username && !parsed.password) {
+      return u.replace(/\/+$/, '');
     }
-  } catch (e) {
+  } catch {
     // Fallback to default
   }
+
   return DEFAULT_SUPABASE_URL;
 }
 
 function normalizeSupabaseKey(raw?: string): string {
   let k = (raw || '').trim().replace(/^['"]|['"]$/g, '');
-  if (!k || k.includes('<') || k.length < 20) {
-    return DEFAULT_SUPABASE_ANON_KEY;
+  // A Supabase JWT key starts with eyJ...
+  if (k.startsWith('eyJ') && k.length > 50) {
+    return k;
   }
-  return k;
+  return DEFAULT_SUPABASE_ANON_KEY;
 }
 
 const supabaseUrl = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
@@ -52,7 +69,7 @@ export async function getOrCreateSessionToken(): Promise<string> {
       if (session?.access_token) {
         return session.access_token;
       }
-    } catch (e) {
+    } catch {
       // Fallback cleanly to public anon key
     }
   }

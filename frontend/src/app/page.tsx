@@ -201,6 +201,9 @@ export default function HomePage() {
     setCurrentStepMessage('Connecting to Jan-Pulse official verification pipeline...');
 
     let eventSeq = 1;
+    const wakeTimer = setTimeout(() => {
+      setCurrentStepMessage('Connecting to verification engine... (Render free tier may take ~30s on first query to wake up)');
+    }, 4000);
 
     try {
       await createRunStream(
@@ -208,8 +211,10 @@ export default function HomePage() {
         'forward',
         language,
         (event) => {
+          clearTimeout(wakeTimer);
           if (event.type === 'run_started') {
             setRunId(event.run_id);
+            setCurrentStepMessage('Connected to engine. Analyzing claim...');
           } else if (event.type === 'step_start') {
             setCurrentStepMessage(event.message || 'Processing...');
           } else if (event.type === 'step_complete') {

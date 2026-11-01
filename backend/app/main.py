@@ -25,8 +25,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:\d+)?$",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -34,7 +33,7 @@ app.add_middleware(
 
 class RunCreateRequest(BaseModel):
     input_text: str
-    input_type: Literal["text", "image", "audio", "url", "pdf"] = "text"
+    input_type: Literal["text", "image", "audio", "pdf"] = "text"
     kind: Literal["forward", "eligibility", "notification", "followup"] = "forward"
     language: str = "en"
 
@@ -60,7 +59,14 @@ class SyncHistoryRequest(BaseModel):
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "jan-pulse-api", "version": "2.0.0"}
+    return {
+        "status": "ok",
+        "service": "jan-pulse-api",
+        "version": "2.0.0",
+        "groq_configured": bool(settings.GROQ_API_KEY),
+        "gemini_configured": bool(settings.GEMINI_API_KEY),
+        "supabase_configured": bool(settings.SUPABASE_URI)
+    }
 
 @app.post("/v1/runs")
 async def create_run(
@@ -71,20 +77,25 @@ async def create_run(
     user_id = user.get("sub", "anon-user")
 
     if is_authenticated:
-        # Authenticated user: Record query & run in cloud database
-        q_row = Database.execute_one(
-            """INSERT INTO queries (user_id, input_type, raw_text, detected_lang)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
-            (user_id, payload.input_type, payload.input_text, payload.language)
-        )
-        query_id = q_row["id"] if q_row else None
+        try:
+            # Authenticated user: Record query & run in cloud database
+            q_row = Database.execute_one(
+                """INSERT INTO queries (user_id, input_type, raw_text, detected_lang)
+                   VALUES (%s, %s, %s, %s) RETURNING id""",
+                (user_id, payload.input_type, payload.input_text, payload.language)
+            )
+            query_id = q_row["id"] if q_row else None
 
-        run_row = Database.execute_one(
-            """INSERT INTO agent_runs (query_id, user_id, kind, status, graph_version)
-               VALUES (%s, %s, %s, 'running', 'v2') RETURNING id""",
-            (query_id, user_id, payload.kind)
-        )
-        run_id = str(run_row["id"]) if run_row else str(uuid.uuid4())
+            run_row = Database.execute_one(
+                """INSERT INTO agent_runs (query_id, user_id, kind, status, graph_version)
+                   VALUES (%s, %s, %s, 'running', 'v2') RETURNING id""",
+                (query_id, user_id, payload.kind)
+            )
+            run_id = str(run_row["id"]) if run_row else str(uuid.uuid4())
+        except Exception as db_err:
+            print(f"[Main API] Warning: DB insert failed, falling back to guest mode: {db_err}", flush=True)
+            is_authenticated = False
+            run_id = str(uuid.uuid4())
     else:
         # Guest user: Generate ephemeral UUID, strictly ZERO database inserts
         query_id = None
@@ -102,11 +113,17 @@ async def create_run(
     )
 
     async def event_generator():
+        # Defeat reverse proxy buffering (Nginx, Cloudflare, Render)
+        # 2KB comment padding forces reverse proxy buffers to flush immediately
+        yield f": {' ' * 2048}\n\n"
         yield f"event: run_started\ndata: {json.dumps({'run_id': run_id, 'status': 'running'})}\n\n"
+        await asyncio.sleep(0.01)
+
         try:
             async for event in JanPulsePipeline.run(state):
                 event_name = event.get("type", "update")
                 yield f"event: {event_name}\ndata: {json.dumps(event)}\n\n"
+                await asyncio.sleep(0.01)
         except Exception as e:
             print(f"[Main API] Run {run_id} execution error: {e}", flush=True)
             import traceback
@@ -123,8 +140,9 @@ async def create_run(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
             "X-Run-ID": run_id
         }
     )
@@ -314,14 +332,13 @@ def get_public_share(share_id: str):
 
     citations = Database.execute_query(
         """SELECT c.role, c.span, c.fetched_at, s.url, s.publisher, s.title
-           FROM citations c
-           JOIN sources s ON s.id = c.source_id
-           WHERE c.verdict_id = %s""",
+               FROM citations c
+               JOIN sources s ON s.id = c.source_id
+               WHERE c.verdict_id = %s""",
         (verdict["id"],)
     )
     verdict["citations"] = citations
     return {"share_card": verdict}
-
 
 @app.get("/v1/me/history")
 def get_user_history(user: dict = Depends(verify_jwt)):
@@ -410,4 +427,3 @@ def list_mcp_tools():
 @app.post("/v1/mcp/call")
 def call_mcp_tool(tool_name: str, arguments: dict):
     return CivicMCPServer.call_tool(tool_name, arguments)
-

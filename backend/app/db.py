@@ -7,7 +7,7 @@ from app.config import settings
 def get_connection():
     if not settings.SUPABASE_URI:
         raise ValueError("SUPABASE_URI is not set")
-    return psycopg.connect(settings.SUPABASE_URI, row_factory=dict_row)
+    return psycopg.connect(settings.SUPABASE_URI, row_factory=dict_row, connect_timeout=5)
 
 class Database:
     @staticmethod
