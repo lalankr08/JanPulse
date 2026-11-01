@@ -1,6 +1,17 @@
 import { getOrCreateSessionToken } from './supabase';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+function normalizeApiUrl(raw?: string): string {
+  let u = (raw || '').trim().replace(/^['"]|['"]$/g, '');
+  if (!u || u.includes('<') || u.includes('your-api-url')) {
+    return "http://localhost:8000";
+  }
+  if (!u.startsWith('http://') && !u.startsWith('https://')) {
+    u = 'https://' + u;
+  }
+  return u.replace(/\/+$/, '');
+}
+
+const API_BASE = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL);
 
 export interface StreamEvent {
   type: string;
