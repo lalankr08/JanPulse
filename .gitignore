@@ -3,7 +3,10 @@
 # ==============================================================================
 .env
 .env*.local
+.env.vercel
+*.env.vercel
 frontend/.env.local
+frontend/.env.vercel
 backend/.env
 !.env.example
 !frontend/.env.example
