@@ -1,17 +1,29 @@
 import { getOrCreateSessionToken } from './supabase';
 
-function normalizeApiUrl(raw?: string): string {
+const DEFAULT_PROD_API_URL = "https://janpulse.onrender.com";
+
+export function getApiBase(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
   let u = (raw || '').trim().replace(/^['"]|['"]$/g, '');
-  if (!u || u.includes('<') || u.includes('your-api-url')) {
+
+  if (u && !u.includes('<') && !u.includes('your-api-url') && !u.includes('yourdomain.com')) {
+    if (!u.startsWith('http://') && !u.startsWith('https://')) {
+      u = 'https://' + u;
+    }
+    return u.replace(/\/+$/, '');
+  }
+
+  // If running in browser and NOT on localhost, automatically route to production Render API
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return DEFAULT_PROD_API_URL;
+    }
     return "http://localhost:8000";
   }
-  if (!u.startsWith('http://') && !u.startsWith('https://')) {
-    u = 'https://' + u;
-  }
-  return u.replace(/\/+$/, '');
-}
 
-const API_BASE = normalizeApiUrl(process.env.NEXT_PUBLIC_API_URL);
+  return process.env.NODE_ENV === 'production' ? DEFAULT_PROD_API_URL : "http://localhost:8000";
+}
 
 export interface StreamEvent {
   type: string;
@@ -27,8 +39,9 @@ export async function createRunStream(
   inputType: "text" | "image" | "audio" | "pdf" = "text"
 ): Promise<void> {
   const token = await getOrCreateSessionToken();
+  const apiBase = getApiBase();
   
-  const response = await fetch(`${API_BASE}/v1/runs`, {
+  const response = await fetch(`${apiBase}/v1/runs`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -83,11 +96,12 @@ export async function createRunStream(
 
 export async function transcribeAudioBlob(blob: Blob, language: string = "en"): Promise<string> {
   const token = await getOrCreateSessionToken();
+  const apiBase = getApiBase();
   const formData = new FormData();
   formData.append("file", blob, "audio.wav");
   formData.append("language", language);
 
-  const res = await fetch(`${API_BASE}/v1/transcribe`, {
+  const res = await fetch(`${apiBase}/v1/transcribe`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`
@@ -104,10 +118,11 @@ export async function transcribeAudioBlob(blob: Blob, language: string = "en"): 
 
 export async function extractImageText(file: File): Promise<{ text: string; filename: string; status?: string; message?: string }> {
   const token = await getOrCreateSessionToken();
+  const apiBase = getApiBase();
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE}/v1/ocr`, {
+  const res = await fetch(`${apiBase}/v1/ocr`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`
@@ -133,10 +148,11 @@ export async function extractDocumentText(file: File): Promise<{
   message?: string;
 }> {
   const token = await getOrCreateSessionToken();
+  const apiBase = getApiBase();
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${API_BASE}/v1/documents/extract`, {
+  const res = await fetch(`${apiBase}/v1/documents/extract`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`
@@ -153,11 +169,12 @@ export async function extractDocumentText(file: File): Promise<{
 
 export async function fetchEnglishSpeech(text: string): Promise<Blob> {
   const token = await getOrCreateSessionToken();
+  const apiBase = getApiBase();
   const formData = new FormData();
   formData.append("text", text);
   formData.append("language", "en");
 
-  const res = await fetch(`${API_BASE}/v1/speak`, {
+  const res = await fetch(`${apiBase}/v1/speak`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${token}`
@@ -173,7 +190,8 @@ export async function fetchEnglishSpeech(text: string): Promise<Blob> {
 
 export async function fetchRunData(runId: string) {
   const token = await getOrCreateSessionToken();
-  const res = await fetch(`${API_BASE}/v1/runs/${runId}`, {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/v1/runs/${runId}`, {
     headers: { "Authorization": `Bearer ${token}` }
   });
   if (!res.ok) throw new Error("Could not fetch run");
@@ -182,7 +200,8 @@ export async function fetchRunData(runId: string) {
 
 export async function fetchRunTrace(runId: string) {
   const token = await getOrCreateSessionToken();
-  const res = await fetch(`${API_BASE}/v1/runs/${runId}/trace`, {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/v1/runs/${runId}/trace`, {
     headers: { "Authorization": `Bearer ${token}` }
   });
   if (!res.ok) throw new Error("Could not fetch trace");
@@ -190,14 +209,16 @@ export async function fetchRunTrace(runId: string) {
 }
 
 export async function fetchPublicShare(shareId: string) {
-  const res = await fetch(`${API_BASE}/v1/share/${shareId}`);
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/v1/share/${shareId}`);
   if (!res.ok) throw new Error("Shared verdict card not found");
   return await res.json();
 }
 
 export async function deleteUserHistory(): Promise<{ status: string; message: string }> {
   const token = await getOrCreateSessionToken();
-  const res = await fetch(`${API_BASE}/v1/me/history`, {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/v1/me/history`, {
     method: "DELETE",
     headers: { "Authorization": `Bearer ${token}` }
   });
@@ -207,10 +228,10 @@ export async function deleteUserHistory(): Promise<{ status: string; message: st
   return await res.json();
 }
 
-
 export async function syncHistoryToCloud(items: any[]): Promise<{ status: string; synced_ids: string[]; synced_count: number }> {
   const token = await getOrCreateSessionToken();
-  const res = await fetch(`${API_BASE}/v1/me/sync-history`, {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/v1/me/sync-history`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -226,7 +247,8 @@ export async function syncHistoryToCloud(items: any[]): Promise<{ status: string
 
 export async function fetchUserHistory(): Promise<{ history: any[]; is_guest: boolean; count?: number }> {
   const token = await getOrCreateSessionToken();
-  const res = await fetch(`${API_BASE}/v1/me/history`, {
+  const apiBase = getApiBase();
+  const res = await fetch(`${apiBase}/v1/me/history`, {
     headers: { "Authorization": `Bearer ${token}` }
   });
   if (!res.ok) {
