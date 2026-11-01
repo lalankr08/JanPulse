@@ -1,8 +1,7 @@
 @echo off
 echo ====================================================================
 echo Starting Jan-Pulse FastAPI Backend Service
-echo Local:   http://localhost:8000
-echo Network: http://10.22.130.180:8000
+echo URL: http://localhost:8000
 echo ====================================================================
 
 set PYTHONPATH=%~dp0services\api
@@ -13,11 +12,11 @@ if not defined PYTHONHOME (
 )
 
 if exist "%~dp0python.bat" (
-    "%~dp0python.bat" -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    "%~dp0python.bat" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ) else if exist "C:\Python314\python.exe" (
-    "C:\Python314\python.exe" -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    "C:\Python314\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ) else (
-    python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+    python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 )
 
 echo.
