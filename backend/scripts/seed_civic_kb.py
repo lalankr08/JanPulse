@@ -457,3 +457,4 @@ with psycopg.connect(supabase_uri) as conn:
         print(f"  • pib_debunks_kb: {debunks_count} verified debunks loaded")
 
 print("\n[Seed] Complete! Civic Knowledge Base is ready for zero-token fast matching.")
+
