@@ -6,7 +6,7 @@ import { Navbar } from '@/components/Navbar';
 import { VerdictChip } from '@/components/VerdictChip';
 import { CitationCard } from '@/components/CitationCard';
 import { AudioPlayer } from '@/components/AudioPlayer';
-import { fetchPublicShare } from '@/lib/api';
+import { fetchPublicShare, savePublicShareCard } from '@/lib/api';
 import { Loader2, Share2, Check, ShieldCheck, ArrowRight, Sparkles } from 'lucide-react';
 
 interface ShareCardClientProps {
@@ -23,11 +23,28 @@ export function ShareCardClient({ shareId }: ShareCardClientProps) {
     if (shareId) {
       fetchPublicShare(shareId)
         .then(data => {
-          setCardData(data.share_card);
+          if (data?.share_card) {
+            setCardData(data.share_card);
+            try {
+              localStorage.setItem(`janpulse_card_${shareId}`, JSON.stringify(data.share_card));
+            } catch (e) {}
+          }
           setLoading(false);
         })
         .catch(err => {
-          console.error(err);
+          console.warn("[ShareCard] Server lookup note:", err);
+          // Check local device storage fallback
+          try {
+            const cached = localStorage.getItem(`janpulse_card_${shareId}`);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              setCardData(parsed);
+              setLoading(false);
+              // Background sync to server so other users / devices can view it
+              savePublicShareCard(parsed).catch(() => {});
+              return;
+            }
+          } catch (e) {}
           setLoading(false);
         });
     }

@@ -6,7 +6,7 @@ import { VerdictChip } from '@/components/VerdictChip';
 import { CitationCard } from '@/components/CitationCard';
 import { EvidenceTrail, TraceStep } from '@/components/EvidenceTrail';
 import { AudioPlayer } from '@/components/AudioPlayer';
-import { createRunStream, transcribeAudioBlob, extractImageText, syncHistoryToCloud } from '@/lib/api';
+import { createRunStream, transcribeAudioBlob, extractImageText, syncHistoryToCloud, savePublicShareCard } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { 
   getLocalHistory, addLocalHistoryItem, getAuthPreference, setAuthPreference,
@@ -315,6 +315,31 @@ export default function HomePage() {
             }, isSynced);
             setRecentHistory(getLocalHistory());
 
+            // Cache each verdict in localStorage & sync to public share repository
+            try {
+              (event.verdicts || []).forEach((v: any) => {
+                const sId = v.share_id || v.id;
+                if (sId) {
+                  const cardPayload = {
+                    id: sId,
+                    share_id: sId,
+                    claim_text: inputText,
+                    kind: 'forward',
+                    label: v.label,
+                    confidence: v.confidence || 0.85,
+                    confidence_reason: v.confidence_reason || '',
+                    explanation: v.explanation || '',
+                    explanation_lang: language,
+                    citations: v.citations || []
+                  };
+                  localStorage.setItem(`janpulse_card_${sId}`, JSON.stringify(cardPayload));
+                  savePublicShareCard(cardPayload).catch(() => {});
+                }
+              });
+            } catch (cacheErr) {
+              console.warn("[Share] Local caching note:", cacheErr);
+            }
+
           } else if (event.status === 'nudge') {
             setNudgeMessage(event.nudge_message);
             setIsRunning(false);
@@ -347,6 +372,14 @@ export default function HomePage() {
     navigator.clipboard.writeText(shareUrl);
     setCopiedShare(true);
     setTimeout(() => setCopiedShare(false), 2500);
+
+    // Sync card to database so public share card link never 404s
+    try {
+      const cached = localStorage.getItem(`janpulse_card_${shareId}`);
+      if (cached) {
+        savePublicShareCard(JSON.parse(cached)).catch(() => {});
+      }
+    } catch (e) {}
   };
 
   return (

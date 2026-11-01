@@ -209,11 +209,42 @@ export async function fetchRunTrace(runId: string) {
   return await res.json();
 }
 
+export async function savePublicShareCard(card: any): Promise<boolean> {
+  try {
+    const apiBase = getApiBase();
+    const res = await fetch(`${apiBase}/v1/share/save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(card)
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("[Share] Could not sync share card to cloud:", err);
+    return false;
+  }
+}
+
 export async function fetchPublicShare(shareId: string) {
   const apiBase = getApiBase();
-  const res = await fetch(`${apiBase}/v1/share/${shareId}`);
-  if (!res.ok) throw new Error("Shared verdict card not found");
-  return await res.json();
+  try {
+    const res = await fetch(`${apiBase}/v1/share/${shareId}`);
+    if (res.ok) {
+      return await res.json();
+    }
+    if (res.status === 404) {
+      throw new Error("Shared verdict card not found");
+    }
+  } catch (err: any) {
+    if (err.message === "Shared verdict card not found") throw err;
+    // Retry once after 1.5s in case backend was cold starting
+    try {
+      await new Promise(r => setTimeout(r, 1500));
+      const res2 = await fetch(`${apiBase}/v1/share/${shareId}`);
+      if (res2.ok) return await res2.json();
+    } catch (e) {}
+    throw new Error("Shared verdict card not found");
+  }
+  throw new Error("Shared verdict card not found");
 }
 
 export async function deleteUserHistory(): Promise<{ status: string; message: string }> {

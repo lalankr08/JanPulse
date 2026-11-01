@@ -57,6 +57,37 @@ class SyncHistoryItem(BaseModel):
 class SyncHistoryRequest(BaseModel):
     items: list[SyncHistoryItem]
 
+class SaveShareCardRequest(BaseModel):
+    share_id: str
+    claim_text: str
+    kind: Optional[str] = "forward"
+    label: str
+    confidence: Optional[float] = 0.8
+    confidence_reason: Optional[str] = ""
+    explanation: str
+    explanation_lang: Optional[str] = "en"
+    citations: Optional[list[dict]] = []
+
+# In-memory LRU-style cache for instant share card retrieval across sessions
+SHARE_CARD_CACHE: dict[str, dict] = {}
+
+def cache_share_card(card: dict):
+    if not card:
+        return
+    share_id = card.get("share_id") or card.get("id")
+    if share_id:
+        if len(SHARE_CARD_CACHE) > 1000:
+            oldest_key = next(iter(SHARE_CARD_CACHE))
+            SHARE_CARD_CACHE.pop(oldest_key, None)
+        SHARE_CARD_CACHE[share_id] = card
+
+@app.on_event("startup")
+def startup_event():
+    try:
+        Database.ensure_public_shares_table()
+    except Exception as e:
+        print(f"[Startup] DB ensure public shares table note: {e}")
+
 @app.get("/health")
 def health_check():
     return {
@@ -122,6 +153,24 @@ async def create_run(
         try:
             async for event in JanPulsePipeline.run(state):
                 event_name = event.get("type", "update")
+                if event_name == "final_verdict":
+                    for v in event.get("verdicts", []):
+                        s_id = v.get("share_id") or v.get("id")
+                        if s_id:
+                            card = {
+                                "id": v.get("id", s_id),
+                                "share_id": s_id,
+                                "claim_text": state.raw_input,
+                                "kind": state.kind,
+                                "label": v.get("label", "cannot_verify"),
+                                "confidence": float(v.get("confidence") or 0.8),
+                                "confidence_reason": v.get("confidence_reason", ""),
+                                "explanation": v.get("explanation", ""),
+                                "explanation_lang": v.get("explanation_lang", state.target_language),
+                                "citations": v.get("citations", [])
+                            }
+                            cache_share_card(card)
+                            Database.save_public_share_card(card)
                 yield f"event: {event_name}\ndata: {json.dumps(event)}\n\n"
                 await asyncio.sleep(0.01)
         except Exception as e:
@@ -327,27 +376,46 @@ def text_to_speech_endpoint(
     audio_bytes = synthesize_english_speech(text)
     return Response(content=audio_bytes, media_type="audio/wav")
 
+@app.post("/v1/share/save")
+def save_share_card_endpoint(payload: SaveShareCardRequest):
+    card = payload.dict()
+    cache_share_card(card)
+    Database.save_public_share_card(card)
+    return {"status": "saved", "share_id": payload.share_id}
+
 @app.get("/v1/share/{share_id}")
 def get_public_share(share_id: str):
+    # 1. Hot in-memory cache
+    if share_id in SHARE_CARD_CACHE:
+        return {"share_card": SHARE_CARD_CACHE[share_id]}
+
+    # 2. Dedicated public share cards table in PostgreSQL
+    card = Database.get_public_share_card(share_id)
+    if card:
+        cache_share_card(card)
+        return {"share_card": card}
+
+    # 3. Fallback: relational verdicts table
     verdict = Database.execute_one(
-        """SELECT v.id, v.label, v.confidence, v.confidence_reason, v.explanation, v.explanation_lang, c.claim_text, c.kind
+        """SELECT v.id, v.share_id, v.label, v.confidence, v.confidence_reason, v.explanation, v.explanation_lang, c.claim_text, c.kind
            FROM verdicts v
            JOIN claims c ON c.id = v.claim_id
            WHERE v.share_id = %s""",
         (share_id,)
     )
-    if not verdict:
-        raise HTTPException(status_code=404, detail="Shared verdict card not found")
+    if verdict:
+        citations = Database.execute_query(
+            """SELECT c.role, c.span, c.fetched_at, s.url, s.publisher, s.title
+                   FROM citations c
+                   JOIN sources s ON s.id = c.source_id
+                   WHERE c.verdict_id = %s""",
+            (verdict["id"],)
+        )
+        verdict["citations"] = citations
+        cache_share_card(verdict)
+        return {"share_card": verdict}
 
-    citations = Database.execute_query(
-        """SELECT c.role, c.span, c.fetched_at, s.url, s.publisher, s.title
-               FROM citations c
-               JOIN sources s ON s.id = c.source_id
-               WHERE c.verdict_id = %s""",
-        (verdict["id"],)
-    )
-    verdict["citations"] = citations
-    return {"share_card": verdict}
+    raise HTTPException(status_code=404, detail="Shared verdict card not found")
 
 @app.get("/v1/me/history")
 def get_user_history(user: dict = Depends(verify_jwt)):

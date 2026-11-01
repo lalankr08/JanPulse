@@ -142,6 +142,27 @@ CRITICAL RULES:
                         (state.run_id,)
                     )
 
+                # Persist to public_share_cards table so public link always resolves
+                Database.save_public_share_card({
+                    "id": verdict_id,
+                    "share_id": share_id,
+                    "claim_text": state.raw_input,
+                    "kind": "rumor_or_hoax",
+                    "label": "contradicted",
+                    "confidence": float(hoax_eval.confidence),
+                    "confidence_reason": hoax_eval.confidence_reason or "Fact-Check: Unsubstantiated internet rumor / meme with zero basis in official record.",
+                    "explanation": hoax_eval.explanation,
+                    "explanation_lang": state.target_language,
+                    "citations": [
+                        {
+                            "url": "https://factcheck.pib.gov.in",
+                            "role": "contradicts",
+                            "span": hoax_eval.correct_official_fact or hoax_eval.explanation[:150],
+                            "publisher": "PIB Fact Check Unit"
+                        }
+                    ]
+                })
+
                 yield {
                     "type": "final_verdict",
                     "run_id": state.run_id,
@@ -638,6 +659,20 @@ Keep all names, official schemes, dates, amounts, and facts exact without adding
                     "span": cit.verbatim_span,
                     "publisher": chunk.get("publisher", "Official Portal") if chunk else "Official Portal"
                 })
+
+            # Persist to public_share_cards table so public link always resolves (guest or authenticated)
+            Database.save_public_share_card({
+                "id": verdict_id,
+                "share_id": share_id,
+                "claim_text": state.raw_input,
+                "kind": state.kind or "forward",
+                "label": v.label,
+                "confidence": float(v.confidence),
+                "confidence_reason": v.confidence_reason or "",
+                "explanation": v.explanation or "",
+                "explanation_lang": state.target_language or "en",
+                "citations": citations_data
+            })
 
             final_verdicts_data.append({
                 "id": verdict_id,

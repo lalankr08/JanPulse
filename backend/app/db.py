@@ -82,3 +82,97 @@ class Database:
         """
         return Database.execute_query(query, (query_text, embedding_str, match_count, source_types))
 
+    @staticmethod
+    def ensure_public_shares_table():
+        try:
+            query = """
+                CREATE TABLE IF NOT EXISTS public_share_cards (
+                    share_id text PRIMARY KEY,
+                    claim_text text,
+                    kind text DEFAULT 'forward',
+                    label text,
+                    confidence numeric,
+                    confidence_reason text,
+                    explanation text,
+                    explanation_lang text,
+                    citations jsonb DEFAULT '[]'::jsonb,
+                    created_at timestamptz DEFAULT now()
+                );
+                CREATE INDEX IF NOT EXISTS idx_public_share_cards_created ON public_share_cards (created_at DESC);
+            """
+            Database.execute_query(query)
+        except Exception as e:
+            print(f"[DB] Table public_share_cards check note: {e}", flush=True)
+
+    @staticmethod
+    def save_public_share_card(card: dict) -> bool:
+        try:
+            import json
+            share_id = card.get("share_id") or card.get("id")
+            if not share_id:
+                return False
+            query = """
+                INSERT INTO public_share_cards (
+                    share_id, claim_text, kind, label, confidence, confidence_reason,
+                    explanation, explanation_lang, citations
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (share_id) DO UPDATE SET
+                    claim_text = EXCLUDED.claim_text,
+                    label = EXCLUDED.label,
+                    confidence = EXCLUDED.confidence,
+                    confidence_reason = EXCLUDED.confidence_reason,
+                    explanation = EXCLUDED.explanation,
+                    explanation_lang = EXCLUDED.explanation_lang,
+                    citations = EXCLUDED.citations;
+            """
+            citations = card.get("citations", [])
+            citations_json = json.dumps(citations) if not isinstance(citations, str) else citations
+            Database.execute_query(
+                query,
+                (
+                    share_id,
+                    card.get("claim_text", ""),
+                    card.get("kind", "forward"),
+                    card.get("label", "cannot_verify"),
+                    float(card.get("confidence") or 0.8),
+                    card.get("confidence_reason", ""),
+                    card.get("explanation", ""),
+                    card.get("explanation_lang", "en"),
+                    citations_json
+                )
+            )
+            return True
+        except Exception as e:
+            print(f"[DB] Failed to save public share card {card.get('share_id')}: {e}", flush=True)
+            try:
+                Database.ensure_public_shares_table()
+            except Exception:
+                pass
+            return False
+
+    @staticmethod
+    def get_public_share_card(share_id: str) -> Optional[dict]:
+        try:
+            row = Database.execute_one(
+                """SELECT share_id as id, share_id, claim_text, kind, label, confidence, confidence_reason,
+                          explanation, explanation_lang, citations, created_at
+                   FROM public_share_cards
+                   WHERE share_id = %s""",
+                (share_id,)
+            )
+            if row:
+                if isinstance(row.get("citations"), str):
+                    import json
+                    try:
+                        row["citations"] = json.loads(row["citations"])
+                    except Exception:
+                        row["citations"] = []
+                elif row.get("citations") is None:
+                    row["citations"] = []
+                return row
+        except Exception as e:
+            print(f"[DB] Error querying public_share_cards for {share_id}: {e}", flush=True)
+        return None
+
+
