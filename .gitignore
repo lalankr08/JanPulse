@@ -5,9 +5,12 @@
 .env*.local
 .env.vercel
 *.env.vercel
+.env.railway
+*.env.railway
 frontend/.env.local
 frontend/.env.vercel
 backend/.env
+backend/.env.railway
 !.env.example
 !frontend/.env.example
 !backend/.env.example
