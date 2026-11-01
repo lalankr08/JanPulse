@@ -5,7 +5,7 @@ echo URL:     http://localhost:3000
 echo Backend: http://localhost:8000
 echo ====================================================================
 
-cd /d "%~dp0apps\web"
+cd /d "%~dp0frontend"
 set NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 

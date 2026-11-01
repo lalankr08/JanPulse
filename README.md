@@ -102,20 +102,22 @@ GEMINI_API=AQ...
 ```
 
 ### 2. Apply Database Migrations
-Execute the SQL migration in `supabase/migrations/001_initial_schema.sql` inside your Supabase project's SQL Editor (or via Supabase CLI).
+Execute the SQL migration in `backend/migrations/001_initial_schema.sql` inside your Supabase project's SQL Editor (or via Supabase CLI).
 
 ### 3. Start the FastAPI Backend
 ```bash
 # In one terminal
-set PYTHONPATH=services/api
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+cd backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+# Or run: start_backend.bat
 ```
 
 ### 4. Start the Next.js Frontend
 ```bash
 # In another terminal
-cd apps/web
+cd frontend
 npm run dev
+# Or run: start_frontend.bat
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 

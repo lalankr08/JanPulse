@@ -2,12 +2,15 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load from root .env if present
-root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+# Load from backend/.env or root ../.env if present
+backend_env = Path(__file__).resolve().parent.parent / ".env"
+root_env = Path(__file__).resolve().parent.parent.parent / ".env"
+
+if backend_env.exists():
+    load_dotenv(dotenv_path=backend_env)
 if root_env.exists():
     load_dotenv(dotenv_path=root_env)
-else:
-    load_dotenv()
+load_dotenv()
 
 class Settings:
     SUPABASE_URI: str = os.getenv("SUPABASE_URI", "")

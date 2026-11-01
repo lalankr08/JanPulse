@@ -3,7 +3,11 @@
 # ==============================================================================
 .env
 .env*.local
+frontend/.env.local
+backend/.env
 !.env.example
+!frontend/.env.example
+!backend/.env.example
 
 # ==============================================================================
 # Python
@@ -12,6 +16,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+backend/**/__pycache__/
 
 # Virtual Environments
 .venv/
@@ -20,6 +25,7 @@ ENV/
 env/
 env.bak/
 venv.bak/
+backend/.venv/
 
 # Distribution / packaging
 build/
@@ -62,6 +68,7 @@ cover/
 # Node.js & Next.js
 # ==============================================================================
 node_modules/
+frontend/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -70,14 +77,18 @@ lerna-debug.log*
 
 # Next.js build output & cache
 .next/
-apps/web/.next/
+frontend/.next/
 out/
-apps/web/out/
+frontend/out/
 *.tsbuildinfo
 next-env.d.ts.bak
 
 # Vercel
 .vercel
+
+# Legacy folders
+apps/
+services/
 
 # ==============================================================================
 # Operating System & IDE
@@ -115,7 +126,7 @@ ehthumbs_vista.db
 # ==============================================================================
 # Development Scripts & Personal Wrappers
 # ==============================================================================
-scripts/
+backend/scripts/
 python.bat
 
 # ==============================================================================
@@ -128,4 +139,3 @@ python.bat
 *.swp
 temp/
 tmp/
-
