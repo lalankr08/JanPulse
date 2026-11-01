@@ -1,6 +1,10 @@
 # Jan-Pulse — Civic Intelligence and Verification Engine
 
-Jan-Pulse is an open-source civic verification engine where Indian citizens can verify viral forwards, check government scheme eligibility from official rules, and understand gazette notifications in plain language. Every statement cites an official government source fetched at runtime with exact timestamps, and the system abstains with "Can't verify" rather than guessing.
+[![Live Application](https://img.shields.io/badge/Live-janpulse.lalankr.in-0071E3?style=for-the-badge&logo=vercel)](https://janpulse.lalankr.in)
+[![Backend Status](https://img.shields.io/badge/API-Render-46E3B7?style=for-the-badge&logo=render)](https://janpulse.onrender.com/health)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+
+**Jan-Pulse** is an open-source civic intelligence engine empowering Indian citizens to verify viral WhatsApp forwards, discover public scheme eligibility from official criteria, and decode complex government gazettes in plain language. Every verdict cites authoritative public sources fetched at runtime with exact timestamps, strictly adhering to an automated *"Cannot verify"* policy rather than guessing or hallucinating.
 
 ---
 
@@ -8,23 +12,53 @@ Jan-Pulse is an open-source civic verification engine where Indian citizens can 
 
 ```mermaid
 flowchart TB
-  U["Citizen Browser (Next.js 15 + Tailwind)"] -->|"Anonymous Sign-in / JWT"| SA["Supabase Auth"]
-  U -->|"SSE Stream / Multipart Form"| API["FastAPI Backend Service"]
-  API -->|"Verify Token"| SA
-  API --> AG["Typed State Graph Pipeline"]
-  AG --> ROUTER["Model Router"]
-  ROUTER --> GQ["Groq: gpt-oss-120b, gpt-oss-20b"]
-  ROUTER --> GM["Gemini: gemini-3.8-flash, 768d embeddings"]
-  AG --> STT["Groq Whisper (whisper-large-v3)"]
-  API --> TTS["Groq Orpheus (WAV) / Browser WebSpeech"]
-  AG --> TL["Tool Registry"]
-  TL --> PIB["PIB Press Releases (RSS & Live Pages)"]
-  TL --> MS["myScheme Official Public API"]
-  TL --> EG["e-Gazette & PDF Parser"]
-  TL --> DG["data.gov.in (OGD API)"]
-  AG <--> DB[("Supabase Postgres (pgvector, tsvector, RLS)")]
-  EXT["External AI Agent"] --> MCPP["Civic Pulse MCP Server"]
-  MCPP --> AG
+  subgraph Client ["Citizen Interface (Next.js 15)"]
+    UI["Web Portal (Apple HIG & Tailwind)"]
+    WSS["Browser SpeechSynthesis (0-Token Local TTS)"]
+    WSR["Browser SpeechRecognition (0-Token Local STT)"]
+    OG["Dynamic 1200x630 OpenGraph Preview Cards"]
+  end
+
+  subgraph Cloud ["Civic Cloud Infrastructure"]
+    AUTH["Supabase Auth (Anonymous & Citizen JWT)"]
+    API["FastAPI Production Backend (Render)"]
+    BW["Auto-Warmer Health Ping Engine"]
+  end
+
+  subgraph Engine ["Typed State Graph Verification Engine"]
+    ROUTER["Model Router & Schema Engine"]
+    GROQ["Groq LPU: llama-3.1-8b-instant (Fast Reasoning)"]
+    GEMINI["Google Gemini: gemini-3.8-flash & 768d Embeddings"]
+    WHISPER["Groq Whisper (whisper-large-v3 Audio Fallback)"]
+    TOOLS["Civic Tool Registry"]
+  end
+
+  subgraph OfficialSources ["Verified Public Data Ingestion"]
+    PIB["PIB Press Releases (pib.gov.in)"]
+    NEWS["Google News RSS Verified Feeds"]
+    MS["myScheme Official Registry (myscheme.gov.in)"]
+    EG["The Gazette of India (egazette.gov.in PDF RAG)"]
+    DG["Open Government Data (data.gov.in)"]
+  end
+
+  subgraph Storage ["Supabase PostgreSQL"]
+    DB[("pgvector & tsvector (RLS Secured)")]
+  end
+
+  UI -->|"SSE Stream / Multipart"| API
+  UI -->|"Session Tokens"| AUTH
+  UI --> WSS
+  UI --> WSR
+  API -->|"Zero-Latency Warmer"| BW
+  API --> Engine
+  ROUTER --> GROQ
+  ROUTER --> GEMINI
+  TOOLS --> PIB
+  TOOLS --> NEWS
+  TOOLS --> MS
+  TOOLS --> EG
+  TOOLS --> DG
+  Engine <--> DB
 ```
 
 ---
@@ -33,99 +67,146 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-  A["ingest (Input Sanitization & Language Detection)"] --> B["extract_claims (gpt-oss-20b JSON Schema)"]
-  B -->|"no checkable claims"| X["Friendly Nudge & Guidance"]
-  B --> C["plan (gpt-oss-120b Tool Selection)"]
-  C --> D["retrieve (Parallel Tool Execution with Timeouts)"]
-  D --> E["index and rank (Gemini 768d Embeddings + Hybrid Search)"]
-  E --> F["judge (gpt-oss-120b Structured Evaluation)"]
-  F --> G["verify_citations (Programmatic Code Verification)"]
-  G -->|"gaps & budget remains"| C
-  G -->|"gaps & budget exhausted"| H["abstain on unverified claims"]
-  G -->|"passes verification"| I["explain and translate"]
+  A["1. ingest (Sanitization, SSRF Filter & Language Detection)"] --> B["2. extract_claims (Atomic Claim Decomposition & Viral Hoax Check)"]
+  B -->|"no checkable claims"| X["Friendly Nudge & Civic Guidance"]
+  B -->|"viral meme / hoax detected"| Z["Instant Debunk & Fast Verdict"]
+  B --> C["3. plan (Targeted Multi-Source Tool Selection)"]
+  C --> D["4. retrieve (Parallel Public Data & News Fetching)"]
+  D --> E["5. rank & index (Gemini 768d Embeddings + Hybrid Vector Search)"]
+  E --> F["6. judge (Structured Evidence Grounding & Confidence Scoring)"]
+  F --> G["7. verify_citations (Programmatic Continuous Span Verification)"]
+  G -->|"citation missing & budget left"| C
+  G -->|"unverified after retries"| H["abstain: 'cannot_verify'"]
+  G -->|"verified against evidence"| I["8. explain & translate (English / Hindi / Regional)"]
   H --> I
-  I --> J["persist to Supabase & stream SSE to citizen"]
+  I --> J["9. persist to Supabase & stream live SSE to Citizen"]
+  Z --> J
 ```
 
 ---
 
-## 3. Features & Official Data Sources
+## 3. Core Features & Capabilities
 
-| Feature | What It Does | Official Sources Used |
+| Feature | Description | Authoritative Sources |
 |---|---|---|
-| **F1. Forward Checker** | Validates viral WhatsApp/social media messages (text, image, audio) and outputs Supported, Contradicted, Partly Supported, or Can't Verify. | Press Information Bureau (PIB) RSS (`pib.gov.in`), myScheme (`myscheme.gov.in`), Central Gazettes. |
-| **F2. Scheme Eligibility Wizard** | Matches citizen circumstances against official scheme criteria with adaptive questions, original wording, and documents required. | myScheme official REST API (`api.myscheme.gov.in`) with live eligibility markdown and document catalogs. |
-| **F3. Notification Explainer** | Breaks down official government gazette circulars or PDFs into who is affected, effective dates, deadlines, penalties, and action steps. | The Gazette of India (`egazette.gov.in`) & allowlisted ministry publications. |
-| **F4. Voice & Multilingual** | Speech-to-text voice notes in Hindi/English with editable transcripts; audio readout in English via Groq Orpheus and regional languages via device speech. | Groq `whisper-large-v3`, Groq `canopylabs/orpheus-v1-english`, Web Speech API. |
-| **F5. Provenance & Evidence Trail** | Full disclosure of all tool calls, source URLs, HTTP status codes, and execution latencies in milliseconds. | Logged in Supabase `trace_events`. |
-| **F6. Security & Data Control** | Prompt injection neutralization, SSRF protection against internal IPs, and one-click data deletion. | In-memory boundaries, allowlisted domains, `/v1/me/history`. |
-| **F8. Public Verdict Cards** | Shareable card link exposing only the verified verdict, explanation, and official citations. | Public endpoint `/v1/share/{share_id}`. |
-| **F9. Civic Pulse MCP Server** | Model Context Protocol server exposing `check_claim`, `find_schemes`, and `explain_notification`. | JSON-RPC MCP Tools. |
+| **F1. Forward Checker** | Validates viral claims (text, screenshot OCR, voice note) and assigns grounded labels: `supported`, `contradicted`, `partly_supported`, or `cannot_verify`. | Press Information Bureau (`pib.gov.in`), Google News RSS wires, Ministry Gazettes. |
+| **F2. Scheme Eligibility Wizard** | Matches citizen circumstances (age, occupation, state, caste, income) against official scheme criteria with required document checklists. | myScheme official REST registry (`myscheme.gov.in`). |
+| **F3. Gazette Explainer** | Decodes central circulars, acts, and statutory PDF orders into plain language: who is affected, deadlines, penalties, and next steps. | The Gazette of India (`egazette.gov.in`) parsed via RAG chunking. |
+| **F4. Zero-Token Speech (TTS/STT)** | Uses browser-native Web Speech APIs for instant client-side readouts and live voice note transcription with 0 server token consumption. | Client Web Speech API (English & Hindi) + Groq Whisper fallback. |
+| **F5. Social Share Cards** | Dynamic 1200×630 server-rendered OpenGraph cards that automatically unfurl on WhatsApp, Twitter/X, Telegram, and LinkedIn. | Next.js `ImageResponse` with real-time colored verdict badges. |
+| **F6. Background Engine Warmer** | Pings the backend `/health` endpoint silently upon page load with a corner status pill, eliminating cold-start latency before the user submits a query. | Real-time health check & session-aware caching. |
+| **F7. Provenance & Evidence Trail** | Full disclosure of all tool calls, source URLs, HTTP status codes, and execution latencies in milliseconds. | Tracked via `trace_events` in Supabase. |
+| **F8. Civic Pulse MCP Server** | Implements the Model Context Protocol (MCP) exposing `check_claim`, `find_schemes`, and `explain_notification` to external agents. | Native JSON-RPC MCP Tools. |
 
 ---
 
-## 4. Models and Routing Strategy
+## 4. Models & Routing Strategy
 
-- **Groq `openai/gpt-oss-20b`**: High-speed claim extraction, input routing, and JSON-schema classification.
-- **Groq `openai/gpt-oss-120b`**: Multi-step planning, evidence judging, and scheme fact extraction.
-- **Google Gemini `gemini-3.8-flash`**: Long context documents, full gazette notifications, and automatic fallback for Groq rate limits.
-- **Google Gemini `models/gemini-embedding-001`**: 768-dimensional dense vector embeddings stored in Supabase pgvector.
-- **Groq `whisper-large-v3`**: Accurate speech-to-text with language code hints (`hi`, `en`, `ta`, `te`, `bn`, `mr`).
-- **Groq `canopylabs/orpheus-v1-english`**: Low-latency English WAV voice synthesis.
+- **Groq `llama-3.1-8b-instant`**: Ultra-fast 8B parameter model (~150ms latency) handling claim extraction, planning, and structured evidence evaluation with low token overhead.
+- **Google Gemini `models/gemini-3.8-flash`**: High-context document processing, multimodal OCR for scanned circulars, and comprehensive fallback.
+- **Google Gemini `models/gemini-embedding-001`**: 768-dimensional dense vector embeddings stored in Supabase `pgvector`.
+- **Groq `whisper-large-v3`**: High-accuracy speech-to-text fallback when browser `SpeechRecognition` is not supported.
 
 ---
 
-## 5. Security & Trust Architecture
+## 5. Repository Structure
 
-1. **Prompt Injection Defense**: All user inputs and scraped web texts are enclosed within strict `<untrusted_external_content>` tags. System instructions explicitly prohibit executing embedded commands or instructions. Heuristic screening logs security alerts to `trace_events`.
-2. **SSRF Guardrails**: User-supplied URLs are strictly validated against an allowlist of Indian government domains (`.gov.in`, `.nic.in`). Private and localhost IP networks (`127.0.0.0/8`, `10.0.0.0/8`, `192.168.0.0/16`, `169.254.0.0/16`) are blocked at network inception.
-3. **Programmatic Citation Verification**: The judge model's citations are verified in Python code before being returned to the user. If the cited continuous span is missing from the stored chunk, the citation is rejected and the verdict falls back to `cannot_verify`.
-4. **Data Minimization**: Jan-Pulse does not require or collect Aadhaar, phone numbers, or residential addresses.
+```
+JanPulse/
+├── frontend/               # Next.js 15 App Router Web Client
+│   ├── src/
+│   │   ├── app/            # Pages: /, /explain, /schemes, /about, /account, /share/[id]
+│   │   │   ├── opengraph-image.tsx       # Root 1200x630 social banner
+│   │   │   └── share/[id]/
+│   │   │       ├── page.tsx              # Server-rendered metadata for crawlers
+│   │   │       ├── opengraph-image.tsx   # Dynamic verdict banner for WhatsApp/X
+│   │   │       └── ShareCardClient.tsx   # Interactive client component
+│   │   ├── components/     # Apple HIG UI components, AudioPlayer, BackendWarmer
+│   │   └── lib/            # api.ts, supabase.ts, historyStore.ts
+│   ├── package.json
+│   └── tailwind.config.ts
+│
+├── backend/                # FastAPI Production Backend Service
+│   ├── app/
+│   │   ├── graph/          # Typed state graph & pipeline execution
+│   │   ├── llm/            # ModelRouter, schemas, guardrails, and prompts
+│   │   ├── rag/            # Embedder, chunker, gazette RAG, and verifier
+│   │   ├── tools/          # PIB, myScheme, e-Gazette, Google News RSS, data.gov.in
+│   │   ├── voice/          # Whisper STT & Orpheus TTS fallbacks
+│   │   ├── config.py       # Pydantic environment configuration
+│   │   ├── db.py           # Resilient PostgreSQL connection pool
+│   │   └── main.py         # REST endpoints & SSE streaming routes
+│   ├── migrations/         # PostgreSQL schema & pgvector setup
+│   ├── Dockerfile          # Multi-worker production container
+│   └── requirements.txt
+│
+├── start_backend.bat       # 1-Click Windows backend launcher
+├── start_frontend.bat      # 1-Click Windows frontend launcher
+└── README.md
+```
 
 ---
 
-## 6. Quickstart & Local Setup
+## 6. Local Setup & Quickstart
 
 ### Prerequisites
 - Python 3.11+ / 3.12 / 3.14
 - Node.js 18+ / 20+ / 24+
-- Supabase Project with `vector` and `pg_trgm` extensions
+- Supabase Project with `vector` and `pg_trgm` extensions enabled
 
 ### 1. Environment Configuration
-Create `.env` based on `.env.example`:
+
+Create a `.env` file in the root directory (or in `backend/.env` and `frontend/.env.local`):
+
 ```env
+# Backend Environment (.env or backend/.env)
 SUPABASE_URL=https://<your-project>.supabase.co
 SUPABASE_ANON_KEY=<your-anon-key>
 SUPABASE_URI=postgresql://postgres.<project>:<password>@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
 GROQ_API=gsk_...
 GEMINI_API=AQ...
+
+# Frontend Environment (frontend/.env.local)
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 ```
 
 ### 2. Apply Database Migrations
-Execute the SQL migration in `backend/migrations/001_initial_schema.sql` inside your Supabase project's SQL Editor (or via Supabase CLI).
+Run the SQL migration in `backend/migrations/001_initial_schema.sql` inside your Supabase project's SQL Editor.
 
-### 3. Start the FastAPI Backend
+### 3. Launch Services
+
+#### Option A: 1-Click Windows Launchers
+- Double-click **`start_backend.bat`** (launches FastAPI at `http://localhost:8000`).
+- Double-click **`start_frontend.bat`** (launches Next.js at `http://localhost:3000`).
+
+#### Option B: Terminal
 ```bash
-# In one terminal
+# Terminal 1: Backend
 cd backend
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-# Or run: start_backend.bat
+
+# Terminal 2: Frontend
+cd frontend
+npm install
+npm run dev
 ```
 
-### 4. Start the Next.js Frontend
-```bash
-# In another terminal
-cd frontend
-npm run dev
-# Or run: start_frontend.bat
-```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## 7. Limitations & Ethical Notice
+## 7. Cloud Deployment
 
-- **Advisory Guidance**: Jan-Pulse is an unofficial public information tool. Verdicts and eligibility calculations are automated guidance based on published records, not official government decisions.
-- **Audio Output**: Server-side Groq Orpheus voice supports English only. Regional languages (Hindi, Tamil, etc.) use the client device's browser speech synthesis when available, and the Listen button is safely hidden if the device lacks a matching voice.
-- **No Deepfake Models**: Per track specifications, Jan-Pulse does not claim to detect synthetic audio/video deepfakes; it verifies factual claims against textual official records.
+- **Frontend**: Deployed on [Vercel](https://vercel.com) (`https://janpulse.lalankr.in`).
+- **Backend**: Containerized via `backend/Dockerfile` on [Render](https://render.com) (`https://janpulse.onrender.com`).
+- **Database**: Cloud [Supabase](https://supabase.com) PostgreSQL with `pgvector` indexing.
 
+---
+
+## 8. Limitations & Ethical Notice
+
+- **Advisory Guidance**: Jan-Pulse provides algorithmic guidance based on public government documentation. Verdicts and scheme calculations are automated assistance and do not substitute official administrative determinations.
+- **Strict Verification Boundary**: The system programmatically verifies cited spans against retrieved sources before displaying verdicts. If an authoritative record cannot be matched, it marks the claim as `cannot_verify`.
+- **Privacy By Design**: Jan-Pulse never collects Aadhaar numbers, phone numbers, or private user credentials. Guest mode functions entirely without cloud database persistence.

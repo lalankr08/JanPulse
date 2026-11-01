@@ -12,7 +12,11 @@ if not defined PYTHONHOME (
     )
 )
 
-if exist "%~dp0python.bat" (
+if exist "%~dp0.venv\Scripts\python.exe" (
+    "%~dp0.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+) else if exist "%~dp0backend\.venv\Scripts\python.exe" (
+    "%~dp0backend\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+) else if exist "%~dp0python.bat" (
     "%~dp0python.bat" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ) else if exist "C:\Python314\python.exe" (
     "C:\Python314\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
