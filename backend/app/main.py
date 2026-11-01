@@ -87,6 +87,10 @@ def startup_event():
         Database.ensure_public_shares_table()
     except Exception as e:
         print(f"[Startup] DB ensure public shares table note: {e}")
+    try:
+        Database.ensure_knowledge_base_tables()
+    except Exception as e:
+        print(f"[Startup] DB ensure knowledge base tables note: {e}")
 
 @app.get("/health")
 def health_check():

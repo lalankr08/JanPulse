@@ -134,6 +134,7 @@ ehthumbs_vista.db
 # ==============================================================================
 backend/scripts/
 scripts/
+!backend/scripts/seed_civic_kb.py
 python.bat
 test_*.py
 test_*.json

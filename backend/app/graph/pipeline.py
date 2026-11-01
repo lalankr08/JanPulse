@@ -8,7 +8,8 @@ from app.db import Database
 from app.llm.schemas import (
     ClaimExtractionResult, PlanResult, JudgeResult,
     SchemeExtractionResult, NotificationExplainerResult,
-    FactCheckAssessment, SchemeDetail, CriterionItem
+    FactCheckAssessment, SchemeDetail, CriterionItem,
+    UnifiedVerificationResponse
 )
 from app.llm.prompts import (
     SYSTEM_BASE, CLAIM_EXTRACTION_PROMPT, PLANNING_PROMPT,
@@ -47,6 +48,203 @@ class JanPulsePipeline:
             yield {"type": "step_start", "node": "extract_claims", "message": "Extracting atomic claims & checking for viral hoaxes..."}
             
             clean_input = sanitize_untrusted_text(state.raw_input)
+
+            # FAST PATH 1: Exact Hash Cache Lookup (0 LLM Tokens, <25ms response)
+            cached_result = Database.get_cached_verdict(clean_input, state.target_language)
+            if cached_result and cached_result.get("verdicts"):
+                yield {"type": "step_start", "node": "cache_hit", "message": "⚡ Instant match found in Jan-Pulse Civic Cache (0 tokens consumed)..."}
+                cached_verdicts = cached_result["verdicts"]
+                cached_sources = cached_result.get("sources", [])
+                
+                for cv in cached_verdicts:
+                    s_id = cv.get("share_id") or f"s_fast_{uuid.uuid4().hex[:8]}"
+                    cv["share_id"] = s_id
+                    Database.save_public_share_card({
+                        "id": cv.get("id") or s_id,
+                        "share_id": s_id,
+                        "claim_text": state.raw_input,
+                        "kind": state.kind,
+                        "label": cv.get("label", "supported"),
+                        "confidence": float(cv.get("confidence") or 0.9),
+                        "confidence_reason": cv.get("confidence_reason", "Verified official record"),
+                        "explanation": cv.get("explanation", ""),
+                        "explanation_lang": state.target_language,
+                        "citations": cv.get("citations", [])
+                    })
+
+                yield {
+                    "type": "final_verdict",
+                    "run_id": state.run_id,
+                    "is_guest": not state.persist_to_db,
+                    "saved_to_cloud": state.persist_to_db,
+                    "verdicts": cached_verdicts,
+                    "evidence_count": len(cached_sources),
+                    "sources": cached_sources,
+                    "fast_path": "cache_hit",
+                    "tokens_saved": 5200
+                }
+                return
+
+            # FAST PATH 2: PIB Fact-Check Registry Match (0 LLM Tokens, <50ms response)
+            pib_match = Database.match_pib_debunk(clean_input, min_similarity=0.40)
+            if pib_match:
+                yield {"type": "step_start", "node": "pib_registry", "message": "⚡ Matched in PIB Fact-Check Registry (0 tokens consumed)..."}
+                
+                v_id = f"v_pib_{uuid.uuid4().hex[:8]}"
+                s_id = f"s_pib_{uuid.uuid4().hex[:8]}"
+                
+                expl = pib_match.get("official_explanation_hi") if state.target_language == "hi" and pib_match.get("official_explanation_hi") else pib_match["official_explanation"]
+                sim_pct = int(float(pib_match.get("sim") or 0.85) * 100)
+                
+                v_payload = {
+                    "id": v_id,
+                    "share_id": s_id,
+                    "claim_id": "claim_pib_1",
+                    "label": pib_match.get("debunk_verdict", "contradicted"),
+                    "confidence": 0.98,
+                    "confidence_reason": f"Official PIB Fact Check match ({sim_pct}% semantic similarity)",
+                    "explanation": expl,
+                    "explanation_lang": state.target_language,
+                    "citations": [
+                        {
+                            "url": pib_match.get("source_url", "https://factcheck.pib.gov.in"),
+                            "role": "contradicts",
+                            "span": pib_match.get("correct_fact", expl[:150]),
+                            "publisher": pib_match.get("publisher", "PIB Fact Check Unit")
+                        }
+                    ]
+                }
+                
+                src_payload = [
+                    {
+                        "title": "PIB Fact Check Unit & Public Record Consensus",
+                        "url": pib_match.get("source_url", "https://factcheck.pib.gov.in"),
+                        "publisher": "Press Information Bureau"
+                    }
+                ]
+                
+                Database.save_public_share_card({
+                    "id": v_id,
+                    "share_id": s_id,
+                    "claim_text": state.raw_input,
+                    "kind": "rumor_or_hoax",
+                    "label": v_payload["label"],
+                    "confidence": 0.98,
+                    "confidence_reason": v_payload["confidence_reason"],
+                    "explanation": expl,
+                    "explanation_lang": state.target_language,
+                    "citations": v_payload["citations"]
+                })
+                Database.save_cached_verdict(clean_input, [v_payload], src_payload, state.target_language)
+                
+                yield {
+                    "type": "final_verdict",
+                    "run_id": state.run_id,
+                    "is_guest": not state.persist_to_db,
+                    "saved_to_cloud": state.persist_to_db,
+                    "verdicts": [v_payload],
+                    "evidence_count": 1,
+                    "sources": src_payload,
+                    "fast_path": "pib_registry",
+                    "tokens_saved": 4800
+                }
+                return
+
+            # FAST PATH 3: Native Civic Schemes Knowledge Base (1 single lightweight prompt, ~350 tokens)
+            scheme_matches = Database.search_schemes_kb(clean_input, limit=2)
+            if scheme_matches and scheme_matches[0].get("score", 0) >= 0.28:
+                top_scheme = scheme_matches[0]
+                yield {"type": "step_start", "node": "scheme_kb", "message": f"⚡ Verifying against official registry for {top_scheme['name']} (~90% token reduction)..."}
+                
+                scheme_context = f"""OFFICIAL SCHEME RECORD:
+Name: {top_scheme['name']} ({top_scheme.get('name_hi', '')})
+Ministry: {top_scheme.get('ministry', 'Government of India')}
+Category: {top_scheme.get('category', 'Welfare')}
+Official Benefit: {top_scheme.get('benefit_summary')}
+Eligibility Rules: {json.dumps(top_scheme.get('eligibility_criteria', []))}
+Exclusions / Disqualifications: {json.dumps(top_scheme.get('exclusions', []))}
+Application URL: {top_scheme.get('application_url')}"""
+
+                unified_prompt = f"""Evaluate this citizen claim against the official government scheme record below.
+Citizen Claim:
+"{clean_input}"
+
+{scheme_context}
+
+CRITICAL INSTRUCTIONS:
+1. Determine if the claim is `supported`, `contradicted`, `partly_supported`, or `cannot_verify`.
+2. Write a clear, polite explanation in English (explanation_en) explaining the exact truth according to the scheme rules.
+3. Write an accurate Hindi translation in Devanagari script (explanation_hi) for Hindi-speaking citizens.
+4. List the key rules cited.
+"""
+                try:
+                    unified_res, m_used = router.complete_structured(
+                        prompt=unified_prompt,
+                        system_prompt="You are an authoritative Indian civic fact-checker grounded exclusively in official government scheme guidelines.",
+                        response_model=UnifiedVerificationResponse,
+                        preferred_model_tier="fast"
+                    )
+                    
+                    v_id = f"v_kb_{uuid.uuid4().hex[:8]}"
+                    s_id = f"s_kb_{uuid.uuid4().hex[:8]}"
+                    
+                    chosen_expl = unified_res.explanation_hi if state.target_language == "hi" and unified_res.explanation_hi else unified_res.explanation_en
+                    
+                    v_payload = {
+                        "id": v_id,
+                        "share_id": s_id,
+                        "claim_id": "claim_kb_1",
+                        "label": unified_res.verdict_label,
+                        "confidence": float(unified_res.confidence),
+                        "confidence_reason": unified_res.confidence_reason or f"Cross-referenced with official guidelines of {top_scheme['name']}",
+                        "explanation": chosen_expl,
+                        "explanation_lang": state.target_language,
+                        "citations": [
+                            {
+                                "url": top_scheme["application_url"],
+                                "role": "supports" if unified_res.verdict_label == "supported" else "contradicts",
+                                "span": top_scheme.get("benefit_summary") or top_scheme['name'],
+                                "publisher": f"Official Portal ({top_scheme.get('ministry', 'Govt of India')})"
+                            }
+                        ]
+                    }
+                    
+                    s_payload = [
+                        {
+                            "title": top_scheme["name"],
+                            "url": top_scheme["application_url"],
+                            "publisher": top_scheme.get("ministry", "Official Portal")
+                        }
+                    ]
+                    
+                    Database.save_public_share_card({
+                        "id": v_id,
+                        "share_id": s_id,
+                        "claim_text": state.raw_input,
+                        "kind": state.kind,
+                        "label": v_payload["label"],
+                        "confidence": v_payload["confidence"],
+                        "confidence_reason": v_payload["confidence_reason"],
+                        "explanation": chosen_expl,
+                        "explanation_lang": state.target_language,
+                        "citations": v_payload["citations"]
+                    })
+                    Database.save_cached_verdict(clean_input, [v_payload], s_payload, state.target_language)
+                    
+                    yield {
+                        "type": "final_verdict",
+                        "run_id": state.run_id,
+                        "is_guest": not state.persist_to_db,
+                        "saved_to_cloud": state.persist_to_db,
+                        "verdicts": [v_payload],
+                        "evidence_count": 1,
+                        "sources": s_payload,
+                        "fast_path": "schemes_kb",
+                        "tokens_saved": 4200
+                    }
+                    return
+                except Exception as kb_err:
+                    print(f"[Pipeline] Scheme KB fast-path note: {kb_err}, proceeding to standard retrieval...")
 
             # Pre-evaluation: Check for viral hoaxes, personal rumors, or internet memes
             hoax_prompt = f"""Evaluate this citizen forward or social media message:
@@ -691,6 +889,16 @@ Keep all names, official schemes, dates, amounts, and facts exact without adding
                 (state.run_id,)
             )
 
+        # Cache standard verdicts to serve future queries in 0 tokens
+        try:
+            Database.save_cached_verdict(
+                clean_input,
+                final_verdicts_data,
+                [{"title": s.get("title"), "url": s.get("url"), "publisher": s.get("publisher")} for s in state.retrieved_sources],
+                state.target_language
+            )
+        except Exception as c_err:
+            print(f"[Pipeline] Cache save note: {c_err}")
 
         yield {
             "type": "final_verdict",

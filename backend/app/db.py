@@ -105,6 +105,20 @@ class Database:
             print(f"[DB] Table public_share_cards check note: {e}", flush=True)
 
     @staticmethod
+    def ensure_knowledge_base_tables():
+        try:
+            import os
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            mig_path = os.path.join(base_dir, "migrations", "002_civic_knowledge_base.sql")
+            if os.path.exists(mig_path):
+                with open(mig_path, "r", encoding="utf-8") as f:
+                    sql = f.read()
+                Database.execute_query(sql)
+                print("[DB] Civic knowledge base tables verified.", flush=True)
+        except Exception as e:
+            print(f"[DB] Civic knowledge base check note: {e}", flush=True)
+
+    @staticmethod
     def save_public_share_card(card: dict) -> bool:
         try:
             import json
@@ -174,5 +188,126 @@ class Database:
         except Exception as e:
             print(f"[DB] Error querying public_share_cards for {share_id}: {e}", flush=True)
         return None
+
+    @staticmethod
+    def get_cached_verdict(query_text: str, language: str = "en") -> Optional[dict]:
+        try:
+            import hashlib
+            q_hash = hashlib.md5(query_text.lower().strip().encode("utf-8")).hexdigest()
+            row = Database.execute_one(
+                """SELECT verdicts, sources, language
+                   FROM verdict_cache
+                   WHERE query_hash = %s AND expires_at > NOW()
+                   LIMIT 1""",
+                (q_hash,)
+            )
+            if row:
+                try:
+                    Database.execute_query(
+                        "UPDATE verdict_cache SET hit_count = hit_count + 1, last_hit_at = NOW() WHERE query_hash = %s",
+                        (q_hash,)
+                    )
+                except Exception:
+                    pass
+                verdicts = row.get("verdicts")
+                sources = row.get("sources")
+                if isinstance(verdicts, str):
+                    import json
+                    verdicts = json.loads(verdicts)
+                if isinstance(sources, str):
+                    import json
+                    sources = json.loads(sources)
+                return {
+                    "verdicts": verdicts,
+                    "sources": sources,
+                    "language": row.get("language", language)
+                }
+        except Exception as e:
+            print(f"[DB] Cache lookup note: {e}", flush=True)
+        return None
+
+    @staticmethod
+    def save_cached_verdict(query_text: str, verdicts: list, sources: list, language: str = "en") -> bool:
+        try:
+            import hashlib
+            import json
+            q_hash = hashlib.md5(query_text.lower().strip().encode("utf-8")).hexdigest()
+            v_json = json.dumps(verdicts) if not isinstance(verdicts, str) else verdicts
+            s_json = json.dumps(sources) if not isinstance(sources, str) else sources
+            Database.execute_query(
+                """INSERT INTO verdict_cache (query_hash, raw_query, verdicts, sources, language, last_hit_at, expires_at)
+                   VALUES (%s, %s, %s, %s, %s, NOW(), NOW() + INTERVAL '14 days')
+                   ON CONFLICT (query_hash) DO UPDATE SET
+                       verdicts = EXCLUDED.verdicts,
+                       sources = EXCLUDED.sources,
+                       hit_count = verdict_cache.hit_count + 1,
+                       last_hit_at = NOW(),
+                       expires_at = NOW() + INTERVAL '14 days'""",
+                (q_hash, query_text.strip(), v_json, s_json, language)
+            )
+            return True
+        except Exception as e:
+            print(f"[DB] Cache save note: {e}", flush=True)
+            return False
+
+    @staticmethod
+    def match_pib_debunk(query_text: str, min_similarity: float = 0.40) -> Optional[dict]:
+        try:
+            row = Database.execute_one(
+                """SELECT claim_text, debunk_verdict, official_explanation, official_explanation_hi,
+                          correct_fact, source_url, publisher,
+                          similarity(claim_text, %s)::float as sim
+                   FROM pib_debunks_kb
+                   WHERE similarity(claim_text, %s) >= %s
+                      OR tsv @@ plainto_tsquery('simple', %s)
+                   ORDER BY sim DESC
+                   LIMIT 1""",
+                (query_text, query_text, min_similarity, query_text)
+            )
+            if row and float(row.get("sim") or 0) >= min_similarity:
+                return row
+        except Exception as e:
+            print(f"[DB] PIB debunk match note: {e}", flush=True)
+        return None
+
+    @staticmethod
+    def search_schemes_kb(query_text: str, limit: int = 3) -> list[dict]:
+        try:
+            rows = Database.execute_query(
+                """SELECT slug, name, name_hi, category, ministry, benefit_summary, benefit_summary_hi,
+                          eligibility_criteria, exclusions, documents_required, application_url,
+                          (similarity(name, %s) * 2.0 + coalesce(ts_rank(tsv, plainto_tsquery('simple', %s)), 0.0))::float as score
+                   FROM civic_schemes_kb
+                   WHERE similarity(name, %s) > 0.18
+                      OR tsv @@ plainto_tsquery('simple', %s)
+                      OR EXISTS (
+                          SELECT 1 FROM unnest(common_misconceptions) m
+                          WHERE similarity(m, %s) > 0.28
+                      )
+                   ORDER BY score DESC
+                   LIMIT %s""",
+                (query_text, query_text, query_text, query_text, query_text, limit)
+            )
+            import json
+            for r in rows:
+                if isinstance(r.get("eligibility_criteria"), str):
+                    try:
+                        r["eligibility_criteria"] = json.loads(r["eligibility_criteria"])
+                    except Exception:
+                        pass
+                if isinstance(r.get("exclusions"), str):
+                    try:
+                        r["exclusions"] = json.loads(r["exclusions"])
+                    except Exception:
+                        pass
+                if isinstance(r.get("documents_required"), str):
+                    try:
+                        r["documents_required"] = json.loads(r["documents_required"])
+                    except Exception:
+                        pass
+            return rows
+        except Exception as e:
+            print(f"[DB] Scheme KB search note: {e}", flush=True)
+            return []
 
 

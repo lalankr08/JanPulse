@@ -297,7 +297,12 @@ export default function HomePage() {
               }
             ]);
           } else if (event.type === 'final_verdict') {
-            setVerdicts(event.verdicts || []);
+            const verdictsWithMeta = (event.verdicts || []).map((v: any) => ({
+              ...v,
+              fast_path: event.fast_path || v.fast_path,
+              tokens_saved: event.tokens_saved
+            }));
+            setVerdicts(verdictsWithMeta);
             setSources(event.sources || []);
             setIsRunning(false);
             setCurrentStepMessage('');
@@ -720,7 +725,24 @@ export default function HomePage() {
                 {verdicts.map((v, idx) => (
                   <div key={idx} className="bg-white border border-black/[0.06] rounded-3xl p-6 sm:p-7 shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
                     <div className="flex items-center justify-between gap-3 mb-5">
-                      <VerdictChip label={v.label} size="lg" />
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <VerdictChip label={v.label} size="lg" />
+                        {v.fast_path === 'pib_registry' && (
+                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#0071E3]/10 text-[#0071E3] flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> PIB Fact-Check Registry (0 Tokens)
+                          </span>
+                        )}
+                        {v.fast_path === 'cache_hit' && (
+                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#5856D6]/10 text-[#5856D6] flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Instant Cache (0 Tokens)
+                          </span>
+                        )}
+                        {v.fast_path === 'schemes_kb' && (
+                          <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#34C759]/10 text-[#248A3D] flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Official Registry (-90% Tokens)
+                          </span>
+                        )}
+                      </div>
                       
                       {v.explanation && (
                         <AudioPlayer text={v.explanation} language={language} />

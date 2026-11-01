@@ -90,3 +90,12 @@ class NotificationExplainerResult(BaseModel):
     penalties_or_actions: list[str] = Field(default_factory=list)
     what_to_do_next: list[str] = Field(default_factory=list)
     citations: list[CitationDraft] = Field(default_factory=list)
+
+class UnifiedVerificationResponse(BaseModel):
+    verdict_label: Literal["supported", "contradicted", "partly_supported", "cannot_verify"]
+    confidence: float = Field(ge=0.0, le=1.0, default=0.9)
+    confidence_reason: str = Field(description="Brief explanation of why this verdict was assigned based on official scheme rules.")
+    explanation_en: str = Field(description="Clear citizen-friendly explanation in English citing official criteria.")
+    explanation_hi: str = Field(description="Clear, natural Hindi translation of the explanation in Devanagari script.")
+    relevant_rules: list[str] = Field(default_factory=list, description="Specific rules, benefit limits, or criteria cited from the official record.")
+
