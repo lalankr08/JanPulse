@@ -127,11 +127,15 @@ ehthumbs_vista.db
 # Development Scripts & Personal Wrappers
 # ==============================================================================
 backend/scripts/
+scripts/
 python.bat
+test_*.py
+test_*.json
 
 # ==============================================================================
-# Temporary / Logs / Scratch Files
+# Temporary / Logs / Scratch Files & Local Notes
 # ==============================================================================
+details.md
 *.log
 *.tmp
 *.temp
