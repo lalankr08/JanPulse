@@ -204,7 +204,13 @@ async def extract_image_ocr(
             "text": extracted_text
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"OCR extraction failed: {str(e)}")
+        print(f"[OCR] Vision extraction warning: {e}")
+        return {
+            "status": "partial",
+            "filename": file.filename or "screenshot.jpg",
+            "text": "",
+            "message": "Image loaded. (AI OCR service is temporarily busy; you can type or verify your claim below)."
+        }
 
 @app.post("/v1/transcribe")
 async def transcribe_audio_endpoint(

@@ -55,7 +55,7 @@ export default function HomePage() {
         setInputText(res.text);
         setImageOcrStatus('Text extracted from image. Review or verify below.');
       } else {
-        setImageOcrStatus('Image loaded. Add details or verify below.');
+        setImageOcrStatus(res?.message || 'Image attached. Add details or verify below.');
       }
     } catch (err: any) {
       console.error('Image OCR error:', err);

@@ -87,7 +87,7 @@ export async function transcribeAudioBlob(blob: Blob, language: string = "en"): 
   return data.text || "";
 }
 
-export async function extractImageText(file: File): Promise<{ text: string; filename: string }> {
+export async function extractImageText(file: File): Promise<{ text: string; filename: string; status?: string; message?: string }> {
   const token = await getOrCreateSessionToken();
   const formData = new FormData();
   formData.append("file", file);
