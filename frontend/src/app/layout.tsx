@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://janpulse.lalankr.in'),
   title: 'Jan-Pulse — Civic Intelligence and Verification for Indian Citizens',
   description: 'Verify viral forwards, check scheme eligibility, and understand government notifications against official public records.',
 };

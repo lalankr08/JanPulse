@@ -35,6 +35,12 @@ class Settings:
     GEMINI_EMBED_MODEL: str = os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
     EMBED_DIM: int = int(os.getenv("EMBED_DIM", "768"))
     
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001", "https://jan-pulse.vercel.app", "https://janpulse.vercel.app"]
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://janpulse.lalankr.in",
+        "https://jan-pulse.vercel.app",
+        "https://janpulse.vercel.app"
+    ]
 
 settings = Settings()
