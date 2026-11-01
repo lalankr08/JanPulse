@@ -130,14 +130,14 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
 
           {/* Auth Capsule */}
           {user ? (
-            <div className="hidden sm:flex items-center gap-1.5 pl-1">
+            <div className="flex items-center gap-1.5 pl-1">
               <Link
                 href="/account"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20 hover:bg-[#34C759]/15 transition-all"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold rounded-full bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20 hover:bg-[#34C759]/15 transition-all"
                 title={`Logged in as ${user.email} (Saved to Account)`}
               >
                 <Cloud className="w-3.5 h-3.5" />
-                <span className="max-w-[100px] truncate">{user.email?.split('@')[0]}</span>
+                <span className="max-w-[70px] sm:max-w-[100px] truncate">{user.email?.split('@')[0]}</span>
               </Link>
               <button
                 type="button"
@@ -149,11 +149,11 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
               </button>
             </div>
           ) : (
-            <div className="hidden sm:flex items-center gap-1.5 pl-1">
+            <div className="flex items-center gap-1.5 pl-1">
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#0071E3] text-white hover:bg-[#0077ED] shadow-apple-sm transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#0071E3] text-white hover:bg-[#0077ED] shadow-apple-sm transition-all active:scale-95"
                 title="Sign In or Create Account to save checks across devices"
               >
                 <User className="w-3.5 h-3.5" />

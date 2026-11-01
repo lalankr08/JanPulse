@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { setAuthPreference, getUnsyncedItems, markItemsAsSynced } from '@/lib/historyStore';
 import { syncHistoryToCloud } from '@/lib/api';
 import { 
-  Shield, Lock, User, Check, X, ArrowRight, Loader2, 
-  Sparkles, Mail, KeyRound, Cloud, HelpCircle, CheckCircle2 
+  Lock, X, ArrowRight, Loader2, 
+  Sparkles, CheckCircle2 
 } from 'lucide-react';
 
 interface AuthModalProps {
@@ -22,6 +23,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialView = 'auth',
   onAuthSuccess,
 }) => {
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'signin' | 'signup' | 'demo'>(
     initialView === 'prompt' ? 'demo' : 'signin'
   );
@@ -34,8 +36,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [offerSignUp, setOfferSignUp] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialView === 'prompt' ? 'signin' : 'signin');
+      setActiveTab(initialView === 'prompt' ? 'demo' : 'signin');
       setErrorMsg('');
       setSuccessMsg('');
       setSyncStatus('');
@@ -43,7 +49,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   }, [isOpen, initialView]);
 
-  if (!isOpen) return null;
+  // Handle ESC key press to dismiss modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !mounted) return null;
 
   const handleContinueAsGuest = () => {
     setAuthPreference('guest');
@@ -168,12 +187,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         return;
       }
 
-      // 3. If email confirmation blocks demo account on remote project, fallback to guest mode
+      // 3. Fallback to guest mode
       setAuthPreference('guest');
       onAuthSuccess?.();
       onClose();
-    } catch (e: any) {
-      // If network fails, allow seamless entry as guest
+    } catch {
       setAuthPreference('guest');
       onAuthSuccess?.();
       onClose();
@@ -182,22 +200,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4 animate-fadeIn">
-      <div className="bg-white border border-black/[0.08] rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-apple-float relative text-[#1D1D1F]">
+  const modalContent = (
+    <div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/40 backdrop-blur-md animate-fadeIn"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          handleContinueAsGuest();
+        }
+      }}
+    >
+      <div 
+        className="relative w-full max-w-md my-auto max-h-[92vh] overflow-y-auto bg-white border border-black/[0.08] rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-apple-float text-[#1D1D1F] transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Apple Squircle Close Button */}
         <button
           type="button"
           onClick={handleContinueAsGuest}
-          className="absolute top-5 right-5 text-[#86868B] hover:text-[#1D1D1F] p-1.5 rounded-full hover:bg-black/[0.05] transition-colors"
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 text-[#86868B] hover:text-[#1D1D1F] p-2 rounded-full hover:bg-black/[0.05] transition-colors focus:outline-none"
           title="Close dialog"
+          aria-label="Close dialog"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Header Icon & Title */}
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto mb-3 shadow-apple-sm">
+        <div className="text-center mb-5 sm:mb-6">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center mx-auto mb-3 shadow-apple-sm">
             <Lock className="w-5 h-5 stroke-[2.2]" />
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1D1D1F]">
@@ -207,7 +236,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               ? 'Quick Citizen Access'
               : 'Sign in to Jan-Pulse'}
           </h2>
-          <p className="text-xs text-[#86868B] mt-1.5 leading-relaxed">
+          <p className="text-xs text-[#86868B] mt-1.5 leading-relaxed max-w-sm mx-auto">
             {activeTab === 'signup'
               ? 'Save your verification cards and scheme eligibility checks across all your devices.'
               : activeTab === 'demo'
@@ -217,7 +246,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Apple Segmented Control Tabs */}
-        <div className="bg-[#E5E5EA]/70 p-1 rounded-full flex gap-1 text-xs font-semibold border border-black/[0.04] mb-6">
+        <div className="bg-[#E5E5EA]/70 p-1 rounded-full flex gap-1 text-[11px] sm:text-xs font-semibold border border-black/[0.04] mb-5">
           <button
             type="button"
             onClick={() => {
@@ -226,9 +255,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setSuccessMsg('');
               setOfferSignUp(false);
             }}
-            className={`flex-1 py-1.5 rounded-full transition-all text-center ${
+            className={`flex-1 py-1.5 px-2 rounded-full transition-all text-center ${
               activeTab === 'signin'
-                ? 'bg-white text-[#1D1D1F] shadow-apple-sm'
+                ? 'bg-white text-[#1D1D1F] shadow-apple-sm font-bold'
                 : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
@@ -242,13 +271,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setSuccessMsg('');
               setOfferSignUp(false);
             }}
-            className={`flex-1 py-1.5 rounded-full transition-all text-center ${
+            className={`flex-1 py-1.5 px-2 rounded-full transition-all text-center ${
               activeTab === 'signup'
-                ? 'bg-white text-[#1D1D1F] shadow-apple-sm'
+                ? 'bg-white text-[#1D1D1F] shadow-apple-sm font-bold'
                 : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
-            Create Account
+            Sign Up
           </button>
           <button
             type="button"
@@ -258,13 +287,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setSuccessMsg('');
               setOfferSignUp(false);
             }}
-            className={`flex-1 py-1.5 rounded-full transition-all text-center ${
+            className={`flex-1 py-1.5 px-2 rounded-full transition-all text-center ${
               activeTab === 'demo'
-                ? 'bg-white text-[#1D1D1F] shadow-apple-sm'
+                ? 'bg-white text-[#1D1D1F] shadow-apple-sm font-bold'
                 : 'text-[#86868B] hover:text-[#1D1D1F]'
             }`}
           >
-            1-Click Demo
+            <span className="hidden sm:inline">1-Click </span>Demo
           </button>
         </div>
 
@@ -307,14 +336,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Form or Demo Content */}
         {activeTab === 'demo' ? (
-          <div className="space-y-4 mb-5">
+          <div className="space-y-4 mb-4">
             <div className="bg-[#F5F5F7] rounded-2xl p-4 border border-black/[0.04]">
               <div className="flex items-center gap-2 text-xs font-semibold text-[#1D1D1F] mb-1">
                 <Sparkles className="w-4 h-4 text-[#0071E3]" />
                 <span>Instant Evaluator Profile</span>
               </div>
               <p className="text-xs text-[#86868B] leading-relaxed">
-                Logs in immediately as <strong className="text-[#1D1D1F]">citizen.demo@janpulse.org</strong> with zero sign-up hassle. Ideal for local network testing with friends.
+                Logs in immediately as <strong className="text-[#1D1D1F]">citizen.demo@janpulse.org</strong> with zero sign-up hassle. Ideal for local testing and evaluator demonstrations.
               </p>
             </div>
 
@@ -336,9 +365,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </>
               )}
             </button>
+
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('signin');
+                  setErrorMsg('');
+                  setSuccessMsg('');
+                  setOfferSignUp(false);
+                }}
+                className="text-xs text-[#86868B] hover:text-[#0071E3] transition-colors"
+              >
+                Have your own credentials? <span className="font-semibold text-[#0071E3] hover:underline">Sign In</span>
+              </button>
+            </div>
           </div>
         ) : (
-          <form onSubmit={handleAuthSubmit} className="space-y-3.5 mb-5">
+          <form onSubmit={handleAuthSubmit} className="space-y-3.5 mb-4">
             <div>
               <label className="block text-[11px] font-semibold text-[#86868B] uppercase tracking-wider mb-1.5">
                 Email Address
@@ -350,7 +394,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="name@example.com"
                   required
-                  className="w-full bg-[#F5F5F7] border border-black/[0.06] rounded-xl px-3.5 py-2.5 text-xs text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-all"
+                  className="w-full bg-[#F5F5F7] border border-black/[0.06] rounded-xl px-3.5 py-2.5 text-sm sm:text-xs text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-all"
                 />
               </div>
             </div>
@@ -364,10 +408,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 6 characters"
+                  placeholder={activeTab === 'signup' ? 'Create a secure password (min 6 chars)' : 'Enter your password'}
                   required
                   minLength={6}
-                  className="w-full bg-[#F5F5F7] border border-black/[0.06] rounded-xl px-3.5 py-2.5 text-xs text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-all"
+                  className="w-full bg-[#F5F5F7] border border-black/[0.06] rounded-xl px-3.5 py-2.5 text-sm sm:text-xs text-[#1D1D1F] placeholder:text-[#86868B] focus:outline-none focus:border-[#0071E3] focus:bg-white transition-all"
                 />
               </div>
             </div>
@@ -383,14 +427,51 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <span>Processing...</span>
                 </>
               ) : (
-                <span>{activeTab === 'signup' ? 'Create Account' : 'Sign In'}</span>
+                <span>{activeTab === 'signup' ? 'Sign Up & Create Account' : 'Sign In'}</span>
               )}
             </button>
+
+            {/* Explicit Switch Between Sign In and Sign Up */}
+            <div className="text-center pt-2">
+              {activeTab === 'signin' ? (
+                <p className="text-xs text-[#86868B]">
+                  Don&apos;t have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('signup');
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                      setOfferSignUp(false);
+                    }}
+                    className="font-semibold text-[#0071E3] hover:text-[#0077ED] hover:underline transition-colors"
+                  >
+                    Sign up now
+                  </button>
+                </p>
+              ) : (
+                <p className="text-xs text-[#86868B]">
+                  Already have an account?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('signin');
+                      setErrorMsg('');
+                      setSuccessMsg('');
+                      setOfferSignUp(false);
+                    }}
+                    className="font-semibold text-[#0071E3] hover:text-[#0077ED] hover:underline transition-colors"
+                  >
+                    Sign in
+                  </button>
+                </p>
+              )}
+            </div>
           </form>
         )}
 
         {/* Footer: Guest Mode */}
-        <div className="pt-4 border-t border-black/[0.06] flex items-center justify-between text-xs text-[#86868B]">
+        <div className="pt-3.5 border-t border-black/[0.06] flex items-center justify-between text-xs text-[#86868B]">
           <span className="text-[11px]">No account required</span>
           <button
             type="button"
@@ -403,4 +484,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };
