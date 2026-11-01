@@ -5,7 +5,7 @@ import { Navbar } from '@/components/Navbar';
 import { createRunStream } from '@/lib/api';
 import { 
   Building2, CheckCircle2, XCircle, HelpCircle, ArrowRight, 
-  Loader2, Sparkles, FileCheck, Layers, ExternalLink 
+  Loader2, Sparkles, FileCheck, Layers, ExternalLink, Search, Check, AlertTriangle
 } from 'lucide-react';
 
 export default function SchemesPage() {
@@ -27,7 +27,7 @@ export default function SchemesPage() {
     setSchemes([]);
     setSelectedSchemeIndex(0);
     setAnswersByScheme({});
-    setCurrentStepMessage('Searching official government registry...');
+    setCurrentStepMessage('Searching official government scheme registry...');
 
     try {
       await createRunStream(
@@ -45,7 +45,7 @@ export default function SchemesPage() {
           }
         },
         (err) => {
-          alert(`Failed to fetch scheme: ${err.message}`);
+          alert(`Failed to fetch schemes: ${err.message}`);
           setIsLoading(false);
         }
       );
@@ -75,34 +75,42 @@ export default function SchemesPage() {
   const allMet = answeredCount === totalCriteria && !hasNotMet && totalCriteria > 0;
 
   return (
-    <>
+    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]">
       <Navbar language={language} setLanguage={setLanguage} />
 
-      <main className="max-w-4xl mx-auto px-4 py-10">
-        <div className="text-center mb-8">
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[#1E2430] mb-3">
-            Government Scheme Finder & Eligibility
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+        {/* Apple Hero */}
+        <div className="text-center max-w-2xl mx-auto mb-10">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0071E3]/10 text-[#0071E3] text-xs font-semibold mb-4 tracking-tight">
+            <Building2 className="w-3.5 h-3.5" />
+            <span>myScheme Official Registry Integration</span>
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-[#1D1D1F] tracking-tight leading-[1.15] mb-4">
+            Find government schemes you qualify for.
           </h1>
-          <p className="text-[#4B5563] text-base max-w-xl mx-auto leading-relaxed">
-            Search by keyword or situation (e.g. "farmer", "housing", "business loan", "women entrepreneur", "pension") to discover all matching official schemes and compare their eligibility rules.
+          <p className="text-[#6E6E73] text-base sm:text-lg leading-relaxed font-normal">
+            Describe your situation (e.g. farmer, small business loan, housing, women entrepreneur, pension) to extract official criteria and compare eligibility.
           </p>
         </div>
 
-        {/* Search input */}
-        <div className="bg-white border border-[#E7E2D8] rounded-lg p-5 shadow-sm mb-8 flex flex-col sm:flex-row gap-3">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Describe your situation or scheme (e.g. farmer loan, rural house, girl child savings, elderly pension)..."
-            className="flex-1 border border-[#E7E2D8] rounded-md px-4 py-3 text-sm text-[#1E2430] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#2F6B5C]"
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          />
+        {/* Search Bar Bento Card */}
+        <div className="bg-white rounded-3xl border border-black/[0.06] p-3 sm:p-4 shadow-[0_4px_24px_rgba(0,0,0,0.04)] mb-8 flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex-1 flex items-center gap-3 px-3 w-full">
+            <Search className="w-5 h-5 text-[#86868B] shrink-0" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search scheme or situation (e.g. farmer crop loan, rural house, elderly pension)..."
+              className="w-full bg-transparent text-sm sm:text-base text-[#1D1D1F] placeholder-[#86868B] outline-none"
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            />
+          </div>
           <button
             type="button"
             onClick={handleSearch}
             disabled={isLoading || !query.trim()}
-            className="px-6 py-3 bg-[#2F6B5C] hover:bg-[#25574a] text-white font-medium rounded-md text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto px-6 py-3 bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold rounded-full text-xs sm:text-sm flex items-center justify-center gap-2 shadow-[0_2px_12px_rgba(0,113,227,0.28)] active:scale-[0.98] transition-all disabled:opacity-40"
           >
             {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Discover Schemes</span>}
           </button>
@@ -110,21 +118,21 @@ export default function SchemesPage() {
 
         {/* Loading status */}
         {isLoading && (
-          <div className="bg-[#F4F1EA] border border-[#E7E2D8] rounded-md p-4 mb-6 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-[#2F6B5C]" />
-            <p className="text-sm text-[#1E2430] font-medium">{currentStepMessage}</p>
+          <div className="bg-white border border-black/[0.06] rounded-2xl p-4 mb-6 flex items-center gap-3 shadow-sm animate-fadeIn">
+            <Loader2 className="w-4 h-4 animate-spin text-[#0071E3]" />
+            <p className="text-xs sm:text-sm text-[#1D1D1F] font-semibold">{currentStepMessage}</p>
           </div>
         )}
 
         {/* Results */}
         {schemes.length > 0 && activeScheme && (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-fadeIn">
             {/* Multi-scheme navigation pills */}
-            <div className="bg-white border border-[#E7E2D8] rounded-lg p-4 shadow-sm">
+            <div className="bg-white border border-black/[0.06] rounded-3xl p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
-                <Layers className="w-4 h-4 text-[#2F6B5C]" />
-                <span className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
-                  Found {schemes.length} Matching Schemes:
+                <Layers className="w-4 h-4 text-[#0071E3]" />
+                <span className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider">
+                  Matching Schemes ({schemes.length}):
                 </span>
               </div>
 
@@ -134,10 +142,10 @@ export default function SchemesPage() {
                     key={idx}
                     type="button"
                     onClick={() => setSelectedSchemeIndex(idx)}
-                    className={`px-3.5 py-2 rounded-pill text-xs font-medium transition-colors border ${
+                    className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
                       selectedSchemeIndex === idx
-                        ? 'bg-[#2F6B5C] text-white border-[#2F6B5C] shadow-sm'
-                        : 'bg-[#FBF9F5] text-[#4B5563] border-[#E7E2D8] hover:border-[#2F6B5C] hover:text-[#1E2430]'
+                        ? 'bg-[#0071E3] text-white shadow-sm shadow-[#0071E3]/30 scale-[1.02]'
+                        : 'bg-[#F5F5F7] text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-[#EBEBF0]'
                     }`}
                   >
                     <span>{s.scheme_name}</span>
@@ -147,13 +155,13 @@ export default function SchemesPage() {
             </div>
 
             {/* Active Scheme Detailed Card */}
-            <div className="bg-white border border-[#E7E2D8] rounded-lg p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E7E2D8] pb-4 mb-5">
+            <div className="bg-white border border-black/[0.06] rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/[0.06] pb-5 mb-6">
                 <div>
-                  <span className="text-xs font-semibold text-[#2F6B5C] uppercase tracking-wider">
-                    {activeScheme.category || "Official Government Scheme"}
+                  <span className="text-xs font-semibold text-[#0071E3] uppercase tracking-wider">
+                    {activeScheme.category || "Government of India Scheme"}
                   </span>
-                  <h2 className="font-serif text-2xl font-bold text-[#1E2430] mt-1">
+                  <h2 className="text-2xl font-bold text-[#1D1D1F] mt-1 tracking-tight">
                     {activeScheme.scheme_name}
                   </h2>
                 </div>
@@ -161,72 +169,72 @@ export default function SchemesPage() {
                   href={activeScheme.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-xs text-[#2F6B5C] hover:underline font-medium flex items-center gap-1"
+                  className="text-xs text-[#0071E3] hover:text-[#0077ED] font-semibold flex items-center gap-1 group shrink-0"
                 >
                   <span>View on myScheme.gov.in</span>
-                  <ExternalLink className="w-3 h-3" />
+                  <ExternalLink className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </a>
               </div>
 
               {/* Status summary */}
-              <div className="p-4 rounded-md mb-6 flex items-center gap-3 bg-[#F4F1EA] border border-[#E7E2D8]">
+              <div className="p-4 sm:p-5 rounded-2xl mb-6 flex items-center gap-3.5 border transition-all">
                 {hasNotMet ? (
-                  <>
-                    <XCircle className="w-6 h-6 text-[#8E3326] shrink-0" />
+                  <div className="bg-[#FF3B30]/10 border border-[#FF3B30]/20 rounded-2xl p-4 flex items-center gap-3 w-full">
+                    <XCircle className="w-6 h-6 text-[#FF3B30] shrink-0" />
                     <div>
-                      <h4 className="text-sm font-semibold text-[#8E3326]">May not meet criteria</h4>
-                      <p className="text-xs text-[#4B5563]">Based on your selection, one or more official requirements are not met.</p>
+                      <h4 className="text-sm font-semibold text-[#FF3B30]">May not qualify</h4>
+                      <p className="text-xs text-[#6E6E73] mt-0.5">Based on your selection, one or more official requirements are not met.</p>
                     </div>
-                  </>
+                  </div>
                 ) : allMet ? (
-                  <>
-                    <CheckCircle2 className="w-6 h-6 text-[#2B5C42] shrink-0" />
+                  <div className="bg-[#34C759]/10 border border-[#34C759]/20 rounded-2xl p-4 flex items-center gap-3 w-full">
+                    <CheckCircle2 className="w-6 h-6 text-[#248A3D] shrink-0" />
                     <div>
-                      <h4 className="text-sm font-semibold text-[#2B5C42]">You appear eligible</h4>
-                      <p className="text-xs text-[#4B5563]">All extracted criteria match your profile according to official lines.</p>
+                      <h4 className="text-sm font-semibold text-[#248A3D]">You appear eligible</h4>
+                      <p className="text-xs text-[#6E6E73] mt-0.5">All extracted conditions match your profile according to official lines.</p>
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <>
-                    <HelpCircle className="w-6 h-6 text-[#7A5413] shrink-0" />
+                  <div className="bg-[#0071E3]/10 border border-[#0071E3]/20 rounded-2xl p-4 flex items-center gap-3 w-full">
+                    <HelpCircle className="w-6 h-6 text-[#0071E3] shrink-0" />
                     <div>
-                      <h4 className="text-sm font-semibold text-[#7A5413]">
-                        Check your eligibility ({answeredCount} of {totalCriteria} checked)
+                      <h4 className="text-sm font-semibold text-[#0071E3]">
+                        Check eligibility ({answeredCount} of {totalCriteria} checked)
                       </h4>
-                      <p className="text-xs text-[#4B5563]">Click 'Yes' or 'No' on each condition below to verify your eligibility.</p>
+                      <p className="text-xs text-[#6E6E73] mt-0.5">Click 'Yes' or 'No' on each condition below to verify.</p>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
 
               {/* Criteria List */}
-              <h3 className="font-medium text-sm text-[#1E2430] mb-3">Eligibility Requirements:</h3>
+              <h3 className="font-semibold text-sm text-[#1D1D1F] mb-3">Eligibility Conditions:</h3>
               <div className="space-y-3 mb-6">
                 {activeScheme.criteria?.map((c: any, idx: number) => {
                   const state = activeAnswers[idx];
                   return (
                     <div 
                       key={idx}
-                      className={`p-4 rounded-md border text-xs transition-colors ${
+                      className={`p-4 rounded-2xl border text-xs transition-all ${
                         state === 'met'
-                          ? 'border-[#2B5C42] bg-[#E6F0E9]'
+                          ? 'border-[#34C759]/30 bg-[#34C759]/5'
                           : state === 'not_met'
-                          ? 'border-[#8E3326] bg-[#F7E4E0]'
-                          : 'border-[#E7E2D8] bg-[#FBF9F5]'
+                          ? 'border-[#FF3B30]/30 bg-[#FF3B30]/5'
+                          : 'border-black/[0.06] bg-[#F5F5F7]'
                       }`}
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <p className="text-[#1E2430] font-medium leading-relaxed">
+                        <p className="text-[#1D1D1F] font-medium leading-relaxed sm:max-w-md">
                           {c.criterion}
                         </p>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleSelectAnswer(idx, 'met')}
-                            className={`px-3 py-1 rounded-pill font-medium text-xs transition-colors ${
+                            className={`px-3.5 py-1.5 rounded-full font-semibold text-xs transition-all active:scale-95 ${
                               state === 'met' 
-                                ? 'bg-[#2B5C42] text-white' 
-                                : 'bg-white border border-[#E7E2D8] text-[#4B5563] hover:text-[#1E2430]'
+                                ? 'bg-[#34C759] text-white shadow-sm' 
+                                : 'bg-white border border-black/[0.08] text-[#1D1D1F] hover:bg-[#EBEBF0]'
                             }`}
                           >
                             Yes / Met
@@ -234,10 +242,10 @@ export default function SchemesPage() {
                           <button
                             type="button"
                             onClick={() => handleSelectAnswer(idx, 'not_met')}
-                            className={`px-3 py-1 rounded-pill font-medium text-xs transition-colors ${
+                            className={`px-3.5 py-1.5 rounded-full font-semibold text-xs transition-all active:scale-95 ${
                               state === 'not_met' 
-                                ? 'bg-[#8E3326] text-white' 
-                                : 'bg-white border border-[#E7E2D8] text-[#4B5563] hover:text-[#1E2430]'
+                                ? 'bg-[#FF3B30] text-white shadow-sm' 
+                                : 'bg-white border border-black/[0.08] text-[#1D1D1F] hover:bg-[#EBEBF0]'
                             }`}
                           >
                             No / Not met
@@ -245,7 +253,7 @@ export default function SchemesPage() {
                         </div>
                       </div>
                       {c.source_span && (
-                        <p className="text-[11px] text-[#6B7280] italic mt-2 border-t border-[#E7E2D8] pt-1.5">
+                        <p className="text-[11px] text-[#86868B] italic mt-2.5 pt-2 border-t border-black/[0.05]">
                           Official wording: "{c.source_span}"
                         </p>
                       )}
@@ -256,12 +264,12 @@ export default function SchemesPage() {
 
               {/* Documents Needed */}
               {activeScheme.documents && activeScheme.documents.length > 0 && (
-                <div className="mb-6 pt-4 border-t border-[#E7E2D8]">
-                  <h3 className="font-medium text-sm text-[#1E2430] mb-2 flex items-center gap-2">
-                    <FileCheck className="w-4 h-4 text-[#2F6B5C]" />
+                <div className="mb-6 pt-5 border-t border-black/[0.06]">
+                  <h3 className="font-semibold text-sm text-[#1D1D1F] mb-3 flex items-center gap-2">
+                    <FileCheck className="w-4 h-4 text-[#0071E3]" />
                     <span>Documents Required:</span>
                   </h3>
-                  <ul className="list-disc list-inside text-xs text-[#4B5563] space-y-1">
+                  <ul className="list-disc list-inside text-xs text-[#6E6E73] space-y-1.5 leading-relaxed bg-[#F5F5F7] p-4 rounded-2xl border border-black/[0.04]">
                     {activeScheme.documents.map((doc: string, dIdx: number) => (
                       <li key={dIdx}>{doc}</li>
                     ))}
@@ -271,9 +279,9 @@ export default function SchemesPage() {
 
               {/* Application steps */}
               {activeScheme.apply_steps && activeScheme.apply_steps.length > 0 && (
-                <div className="mb-4 pt-4 border-t border-[#E7E2D8]">
-                  <h3 className="font-medium text-sm text-[#1E2430] mb-2">How to Apply:</h3>
-                  <ol className="list-decimal list-inside text-xs text-[#4B5563] space-y-1">
+                <div className="mb-5 pt-5 border-t border-black/[0.06]">
+                  <h3 className="font-semibold text-sm text-[#1D1D1F] mb-3">How to Apply:</h3>
+                  <ol className="list-decimal list-inside text-xs text-[#6E6E73] space-y-1.5 leading-relaxed bg-[#F5F5F7] p-4 rounded-2xl border border-black/[0.04]">
                     {activeScheme.apply_steps.map((st: string, sIdx: number) => (
                       <li key={sIdx}>{st}</li>
                     ))}
@@ -281,13 +289,13 @@ export default function SchemesPage() {
                 </div>
               )}
 
-              <p className="text-[11px] text-[#6B7280] italic pt-3 border-t border-[#E7E2D8]">
+              <p className="text-[11px] text-[#86868B] italic pt-3 border-t border-black/[0.06]">
                 {activeScheme.disclaimer}
               </p>
             </div>
           </div>
         )}
       </main>
-    </>
+    </div>
   );
 }

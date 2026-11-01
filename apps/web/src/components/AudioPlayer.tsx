@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import { Volume2, Square, Loader2 } from 'lucide-react';
 import { fetchEnglishSpeech } from '@/lib/api';
@@ -14,7 +16,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    // Check speech synthesis voice availability for non-English
     if (language !== "en" && typeof window !== "undefined" && 'speechSynthesis' in window) {
       const checkVoices = () => {
         const voices = window.speechSynthesis.getVoices();
@@ -45,7 +46,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
     }
 
     if (language === "en") {
-      // Use Groq Orpheus server-side audio
       try {
         setIsLoading(true);
         const blob = await fetchEnglishSpeech(text);
@@ -66,12 +66,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
         setIsPlaying(true);
         setIsLoading(false);
       } catch (e) {
-        console.warn("Groq Orpheus playback failed, falling back to browser speech:", e);
-        // Fallback to browser speech
+        console.warn("Groq Orpheus playback fallback to browser speech:", e);
         playBrowserSpeech();
       }
     } else {
-      // Indian language via browser speech synthesis
       playBrowserSpeech();
     }
   };
@@ -95,7 +93,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
   };
 
   if (language !== "en" && !hasVoice) {
-    // Hide listen button if no voice is installed on device
     return null;
   }
 
@@ -104,26 +101,29 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
       type="button"
       onClick={isPlaying ? handleStop : handlePlay}
       disabled={isLoading}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-pill text-xs font-medium bg-[#F4F1EA] hover:bg-[#E7E2D8] text-[#1E2430] border border-[#E7E2D8] transition-colors"
-      aria-label={isPlaying ? "Stop audio" : "Listen to audio explanation"}
+      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-tight transition-all active:scale-95 ${
+        isPlaying
+          ? 'bg-[#FF3B30]/10 text-[#FF3B30] hover:bg-[#FF3B30]/15'
+          : 'bg-[#0071E3]/10 text-[#0071E3] hover:bg-[#0071E3]/15'
+      }`}
+      aria-label={isPlaying ? "Stop audio readout" : "Listen to audio readout"}
     >
       {isLoading ? (
         <>
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#2F6B5C]" />
-          <span>Generating voice...</span>
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span>Generating...</span>
         </>
       ) : isPlaying ? (
         <>
-          <Square className="w-3.5 h-3.5 fill-current text-[#8E3326]" />
+          <Square className="w-3 h-3 fill-current" />
           <span>Stop</span>
         </>
       ) : (
         <>
-          <Volume2 className="w-3.5 h-3.5 text-[#2F6B5C]" />
+          <Volume2 className="w-3.5 h-3.5" />
           <span>Listen</span>
         </>
       )}
     </button>
   );
 };
-

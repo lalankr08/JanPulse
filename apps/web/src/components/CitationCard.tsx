@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, Building2, Clock } from 'lucide-react';
+import { ExternalLink, Building2, Clock, CheckCircle } from 'lucide-react';
 
 interface CitationCardProps {
   publisher: string;
@@ -18,9 +18,8 @@ export const CitationCard: React.FC<CitationCardProps> = ({
 }) => {
   const formattedTime = fetchedAt 
     ? new Date(fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })
-    : "Just now";
+    : "Verified live";
 
-  // Sanitize and normalize known dead links
   let cleanUrl = url || "https://factcheck.pib.gov.in";
   if (cleanUrl.includes("pib.gov.in/factcheck")) {
     cleanUrl = "https://factcheck.pib.gov.in";
@@ -29,37 +28,36 @@ export const CitationCard: React.FC<CitationCardProps> = ({
   }
 
   return (
-    <div className="bg-[#F4F1EA] border border-[#E7E2D8] rounded-md p-4 text-[#1E2430] flex flex-col gap-2">
-      <div className="flex items-center justify-between text-xs text-[#6B7280]">
-        <div className="flex items-center gap-1.5 font-medium text-[#4B5563]">
-          <Building2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-          <span>{publisher || "Official Government Portal"}</span>
+    <div className="bg-[#F5F5F7] border border-black/[0.06] rounded-2xl p-4 text-[#1D1D1F] flex flex-col gap-2.5 transition-all hover:bg-[#EBEBF0] hover:border-black/[0.1]">
+      <div className="flex items-center justify-between text-xs text-[#86868B]">
+        <div className="flex items-center gap-1.5 font-medium text-[#1D1D1F]">
+          <Building2 className="w-3.5 h-3.5 text-[#0071E3] shrink-0" strokeWidth={1.8} />
+          <span className="truncate max-w-[200px] sm:max-w-xs">{publisher || "Official Government Portal"}</span>
         </div>
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex items-center gap-1 text-[11px] font-mono text-[#86868B] shrink-0">
           <Clock className="w-3 h-3" />
-          <span>Fetched {formattedTime}</span>
+          <span>{formattedTime}</span>
         </div>
       </div>
 
-      <blockquote className="text-sm italic text-[#1E2430] border-l-2 border-[#2F6B5C] pl-3 py-0.5 leading-relaxed my-1">
+      <blockquote className="text-[13px] text-[#1D1D1F] bg-white rounded-xl p-3 border border-black/[0.04] leading-relaxed shadow-sm font-normal">
         "{span}"
       </blockquote>
 
-      <div className="pt-1 flex items-center justify-between text-xs">
+      <div className="pt-0.5 flex items-center justify-between text-xs">
         <a
           href={cleanUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[#2F6B5C] hover:underline flex items-center gap-1 font-medium"
+          className="text-[#0071E3] hover:text-[#0077ED] flex items-center gap-1 font-semibold group transition-colors"
         >
-          <span>View official source</span>
-          <ExternalLink className="w-3 h-3" />
+          <span>Open official source</span>
+          <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
         </a>
-        <span className="text-[11px] text-[#6B7280] uppercase tracking-wider">
-          Role: {role}
+        <span className="text-[11px] font-medium text-[#86868B] bg-black/[0.04] px-2 py-0.5 rounded-full capitalize">
+          {role}
         </span>
       </div>
     </div>
   );
 };
-

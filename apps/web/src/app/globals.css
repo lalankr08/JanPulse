@@ -2,44 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Noto+Sans+Devanagari:wght@400;500;600&family=Noto+Sans+Tamil:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #FBF9F5;
+  --bg: #F5F5F7;
   --surface: #FFFFFF;
-  --surface-2: #F4F1EA;
-  --border: #E7E2D8;
-  --ink: #1E2430;
-  --ink-2: #4B5563;
-  --ink-3: #6B7280;
-  --brand: #2F6B5C;
-  --brand-soft: #E4EFEB;
-  --accent: #C9643B;
+  --surface-secondary: #F5F5F7;
+  --surface-tertiary: #E8E8ED;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-subtle: rgba(0, 0, 0, 0.04);
+  
+  --ink: #1D1D1F;
+  --ink-secondary: #6E6E73;
+  --ink-tertiary: #86868B;
+  
+  --apple-blue: #0071E3;
+  --apple-blue-hover: #0077ED;
+  --apple-blue-subtle: rgba(0, 113, 227, 0.08);
+  
+  --apple-green: #34C759;
+  --apple-red: #FF3B30;
+  --apple-orange: #FF9500;
+  --apple-purple: #AF52DE;
   
   --r-sm: 8px;
-  --r-md: 14px;
-  --r-lg: 20px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 24px;
   --r-pill: 9999px;
   
-  --sh-1: 0 1px 2px rgba(30, 36, 48, 0.05);
-  --sh-2: 0 8px 24px rgba(30, 36, 48, 0.07);
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --sh-card: 0 4px 20px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --sh-hover: 0 12px 36px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.03);
   
-  --font-head: 'Fraunces', 'Newsreader', Georgia, serif;
-  --font-body: 'DM Sans', 'Noto Sans Devanagari', 'Noto Sans Tamil', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
   background-color: var(--bg);
   color: var(--ink);
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.6;
+  letter-spacing: -0.011em;
+  line-height: 1.55;
+  selection-background-color: #0071E3;
+  selection-color: #FFFFFF;
 }
 
-h1, h2, h3, .font-head {
-  font-family: var(--font-head);
-  letter-spacing: -0.01em;
+::selection {
+  background-color: rgba(0, 113, 227, 0.2);
+  color: #1D1D1F;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.028em;
+  font-weight: 700;
+}
+
+/* Apple-style smooth scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 @media (prefers-reduced-motion: reduce) {

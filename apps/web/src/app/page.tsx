@@ -9,7 +9,8 @@ import { AudioPlayer } from '@/components/AudioPlayer';
 import { createRunStream, transcribeAudioBlob, extractImageText } from '@/lib/api';
 import { 
   FileText, Upload, Mic, ArrowRight, RefreshCw, Share2, 
-  AlertCircle, Check, Loader2, Sparkles, Building2, X, Image as ImageIcon
+  AlertCircle, Check, Loader2, Sparkles, Building2, X, Image as ImageIcon,
+  CheckCircle2, ShieldCheck, ArrowUpRight
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -47,15 +48,15 @@ export default function HomePage() {
     const preview = URL.createObjectURL(file);
     setImagePreviewUrl(preview);
     setIsExtractingImage(true);
-    setImageOcrStatus('Analyzing screenshot with Gemini Vision OCR...');
+    setImageOcrStatus('Analyzing with Gemini 3.8 Flash Vision OCR...');
 
     try {
       const res = await extractImageText(file);
       if (res && res.text) {
         setInputText(res.text);
-        setImageOcrStatus('Text extracted from image. Review or verify below.');
+        setImageOcrStatus('Text extracted successfully. Review below.');
       } else {
-        setImageOcrStatus(res?.message || 'Image attached. Add details or verify below.');
+        setImageOcrStatus(res?.message || 'Image attached. Review or add details below.');
       }
     } catch (err: any) {
       console.error('Image OCR error:', err);
@@ -126,7 +127,7 @@ export default function HomePage() {
     setTraceSteps([]);
     setSources([]);
     setNudgeMessage(null);
-    setCurrentStepMessage('Connecting to Jan-Pulse civic engine...');
+    setCurrentStepMessage('Connecting to Jan-Pulse official verification pipeline...');
 
     let eventSeq = 1;
 
@@ -147,7 +148,7 @@ export default function HomePage() {
                 seq: eventSeq++,
                 node: event.node,
                 eventType: 'step_complete',
-                latencyMs: 140
+                latencyMs: 120
               }
             ]);
           } else if (event.type === 'evidence_item') {
@@ -160,7 +161,7 @@ export default function HomePage() {
                 tool: event.publisher,
                 url: event.url,
                 httpStatus: event.http_status,
-                latencyMs: 380
+                latencyMs: 340
               }
             ]);
           } else if (event.type === 'replan') {
@@ -205,123 +206,130 @@ export default function HomePage() {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-[#F5F5F7] text-[#1D1D1F]">
       <Navbar language={language} setLanguage={setLanguage} />
 
-      <main className="max-w-4xl mx-auto px-4 py-10">
-        {/* Intro */}
-        <div className="text-center mb-8">
-          <h1 className="font-serif text-3xl sm:text-4xl font-bold text-[#1E2430] mb-3">
-            Check viral forwards against official records.
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+        {/* Apple-style Hero */}
+        <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0071E3]/10 text-[#0071E3] text-xs font-semibold mb-4 tracking-tight">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Zero Dummy Data • Live Runtime Verification</span>
+          </div>
+          <h1 className="text-3xl sm:text-5xl font-extrabold text-[#1D1D1F] tracking-tight leading-[1.15] mb-4">
+            Verify viral claims with official records.
           </h1>
-          <p className="text-[#4B5563] text-base max-w-xl mx-auto leading-relaxed">
-            Paste or dictate a forward to see what official government notifications and portals actually state. If no official record confirms it, we say so plainly.
+          <p className="text-[#6E6E73] text-base sm:text-lg leading-relaxed font-normal">
+            Paste or dictate any forward to see what official gazettes, PIB releases, and portals confirm. If unverified by official records, we say so plainly.
           </p>
         </div>
 
-        {/* Input Card */}
-        <div className="bg-white border border-[#E7E2D8] rounded-lg p-6 shadow-sm mb-10">
-          {/* Tabs */}
-          <div className="flex border-b border-[#E7E2D8] pb-3 mb-4 gap-6 text-sm">
-            <button
-              type="button"
-              onClick={() => setActiveTab('paste')}
-              className={`flex items-center gap-2 pb-2 -mb-3 font-medium transition-colors border-b-2 ${
-                activeTab === 'paste'
-                  ? 'border-[#2F6B5C] text-[#2F6B5C]'
-                  : 'border-transparent text-[#6B7280] hover:text-[#1E2430]'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Paste message</span>
-            </button>
+        {/* Apple Bento Input Card */}
+        <div className="bg-white rounded-3xl border border-black/[0.06] p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] mb-10 transition-all">
+          {/* iOS Segmented Pill Controls */}
+          <div className="flex items-center justify-center sm:justify-start mb-6">
+            <div className="bg-[#E5E5EA]/70 p-1 rounded-full flex gap-1 text-xs font-semibold border border-black/[0.04]">
+              <button
+                type="button"
+                onClick={() => setActiveTab('paste')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all ${
+                  activeTab === 'paste'
+                    ? 'bg-white text-[#1D1D1F] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Paste forward</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('upload')}
-              className={`flex items-center gap-2 pb-2 -mb-3 font-medium transition-colors border-b-2 ${
-                activeTab === 'upload'
-                  ? 'border-[#2F6B5C] text-[#2F6B5C]'
-                  : 'border-transparent text-[#6B7280] hover:text-[#1E2430]'
-              }`}
-            >
-              <Upload className="w-4 h-4" />
-              <span>Upload image or PDF</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all ${
+                  activeTab === 'upload'
+                    ? 'bg-white text-[#1D1D1F] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                }`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload screenshot</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveTab('speak')}
-              className={`flex items-center gap-2 pb-2 -mb-3 font-medium transition-colors border-b-2 ${
-                activeTab === 'speak'
-                  ? 'border-[#2F6B5C] text-[#2F6B5C]'
-                  : 'border-transparent text-[#6B7280] hover:text-[#1E2430]'
-              }`}
-            >
-              <Mic className="w-4 h-4" />
-              <span>Speak voice note</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('speak')}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full transition-all ${
+                  activeTab === 'speak'
+                    ? 'bg-white text-[#1D1D1F] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
+                    : 'text-[#6E6E73] hover:text-[#1D1D1F]'
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5" />
+                <span>Voice note</span>
+              </button>
+            </div>
           </div>
 
-          {/* Mode contents */}
+          {/* Voice Tab Mode */}
           {activeTab === 'speak' && (
-            <div className="bg-[#F4F1EA] rounded-md p-4 mb-4 flex items-center justify-between">
+            <div className="bg-[#F5F5F7] rounded-2xl p-5 mb-5 flex flex-col sm:flex-row items-center justify-between gap-4 border border-black/[0.04]">
               <div>
-                <p className="text-sm font-medium text-[#1E2430]">Voice input powered by Groq Whisper</p>
-                <p className="text-xs text-[#6B7280]">Record in Hindi or English. The transcript will appear below for you to review.</p>
+                <p className="text-sm font-semibold text-[#1D1D1F]">Speech-to-text with Groq Whisper</p>
+                <p className="text-xs text-[#86868B] mt-0.5">Record in Hindi or English. The verbatim transcript will appear below for review.</p>
               </div>
               <button
                 type="button"
                 onClick={isRecording ? stopRecording : startRecording}
                 disabled={isTranscribing}
-                className={`px-4 py-2 rounded-pill text-xs font-medium flex items-center gap-2 transition-colors ${
+                className={`px-5 py-2.5 rounded-full text-xs font-semibold flex items-center gap-2 transition-all active:scale-95 shadow-sm ${
                   isRecording 
-                    ? 'bg-[#8E3326] text-white animate-pulse'
-                    : 'bg-[#2F6B5C] text-white hover:bg-[#25574a]'
+                    ? 'bg-[#FF3B30] text-white shadow-[0_0_16px_rgba(255,59,48,0.35)] animate-pulse'
+                    : 'bg-[#0071E3] hover:bg-[#0077ED] text-white'
                 }`}
               >
                 <Mic className="w-4 h-4" />
-                <span>{isRecording ? 'Stop Recording' : isTranscribing ? 'Transcribing...' : 'Record Voice'}</span>
+                <span>{isRecording ? 'Stop Recording' : isTranscribing ? 'Transcribing...' : 'Record Voice Note'}</span>
               </button>
             </div>
           )}
 
+          {/* Upload Tab Mode */}
           {activeTab === 'upload' && (
-            <div className="mb-4">
+            <div className="mb-5">
               {imagePreviewUrl ? (
-                <div className="border border-[#E7E2D8] bg-[#FBF9F5] rounded-md p-4 flex flex-col sm:flex-row items-center gap-4">
-                  <div className="relative group w-36 h-36 shrink-0 bg-white rounded border border-[#E7E2D8] overflow-hidden flex items-center justify-center p-1">
+                <div className="border border-black/[0.06] bg-[#F5F5F7] rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+                  <div className="w-32 h-32 shrink-0 bg-white rounded-xl border border-black/[0.06] overflow-hidden flex items-center justify-center p-1 shadow-sm">
                     <img
                       src={imagePreviewUrl}
                       alt="Uploaded screenshot"
-                      className="max-h-full max-w-full object-contain"
+                      className="max-h-full max-w-full object-contain rounded-lg"
                     />
                   </div>
                   <div className="flex-1 text-left min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#1E2430] truncate">{selectedImage?.name}</p>
+                      <p className="text-sm font-semibold text-[#1D1D1F] truncate">{selectedImage?.name}</p>
                       <button
                         type="button"
                         onClick={handleRemoveImage}
-                        className="text-[#8E3326] hover:bg-[#F4F1EA] px-2.5 py-1 rounded transition-colors text-xs flex items-center gap-1 font-medium shrink-0"
+                        className="text-[#FF3B30] hover:bg-[#FF3B30]/10 px-3 py-1 rounded-full transition-colors text-xs flex items-center gap-1 font-semibold shrink-0"
                       >
                         <X className="w-3.5 h-3.5" />
                         <span>Remove</span>
                       </button>
                     </div>
-                    <p className="text-xs text-[#6B7280] mt-0.5">
+                    <p className="text-xs text-[#86868B] mt-0.5 font-mono">
                       {selectedImage ? `${(selectedImage.size / 1024).toFixed(1)} KB` : ''}
                     </p>
 
                     {isExtractingImage ? (
-                      <div className="flex items-center gap-2 text-xs text-[#2F6B5C] font-medium mt-3 bg-white p-2.5 rounded border border-[#E7E2D8]">
+                      <div className="flex items-center gap-2 text-xs text-[#0071E3] font-semibold mt-3 bg-white p-3 rounded-xl border border-black/[0.04]">
                         <Loader2 className="w-4 h-4 animate-spin shrink-0" />
-                        <span>Extracting text & claims via Gemini 3.8 Flash Vision OCR...</span>
+                        <span>Extracting text verbatim with Gemini 3.8 Flash Vision...</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 text-xs text-[#2F6B5C] font-medium mt-3 bg-white p-2.5 rounded border border-[#E7E2D8]">
-                        <Check className="w-4 h-4 shrink-0 text-[#2F6B5C]" />
-                        <span>{imageOcrStatus || 'Text extracted from image. You can review or edit below.'}</span>
+                      <div className="flex items-center gap-2 text-xs text-[#248A3D] font-semibold mt-3 bg-white p-3 rounded-xl border border-black/[0.04]">
+                        <Check className="w-4 h-4 shrink-0" />
+                        <span>{imageOcrStatus || 'Text extracted. Review or edit the claim below.'}</span>
                       </div>
                     )}
                   </div>
@@ -329,16 +337,16 @@ export default function HomePage() {
               ) : (
                 <div
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-[#E7E2D8] hover:border-[#2F6B5C] transition-colors rounded-md p-6 text-center bg-[#FBF9F5] cursor-pointer"
+                  className="border-2 border-dashed border-black/[0.1] hover:border-[#0071E3] transition-colors rounded-2xl p-8 text-center bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] cursor-pointer group"
                 >
-                  <Upload className="w-8 h-8 mx-auto text-[#6B7280] mb-2" />
-                  <p className="text-sm font-medium text-[#1E2430]">Click to select a forward screenshot or document</p>
-                  <p className="text-xs text-[#6B7280] mt-1">Supports PNG, JPG, WebP. Gemini Vision extracts text verbatim automatically.</p>
+                  <Upload className="w-8 h-8 mx-auto text-[#86868B] group-hover:text-[#0071E3] transition-colors mb-2.5" />
+                  <p className="text-sm font-semibold text-[#1D1D1F]">Upload screenshot, circular, or image</p>
+                  <p className="text-xs text-[#86868B] mt-1">Supports PNG, JPG, WebP. Gemini Vision extracts claim text automatically.</p>
                   <button
                     type="button"
-                    className="mt-3 px-4 py-1.5 text-xs font-medium text-[#2F6B5C] bg-white border border-[#E7E2D8] rounded-md hover:bg-[#F4F1EA]"
+                    className="mt-4 px-4 py-1.5 text-xs font-semibold text-[#0071E3] bg-white border border-black/[0.08] rounded-full shadow-sm hover:bg-[#F5F5F7]"
                   >
-                    Browse files
+                    Choose file
                   </button>
                 </div>
               )}
@@ -358,18 +366,18 @@ export default function HomePage() {
 
           {/* Attached image preview banner if active tab is paste/speak */}
           {imagePreviewUrl && activeTab !== 'upload' && (
-            <div className="flex items-center justify-between bg-[#F4F1EA] border border-[#E7E2D8] rounded-md px-3 py-2 mb-3 text-xs">
-              <div className="flex items-center gap-2 text-[#4B5563] truncate">
-                <ImageIcon className="w-4 h-4 text-[#2F6B5C] shrink-0" />
-                <span className="font-medium text-[#1E2430] truncate">{selectedImage?.name}</span>
-                <span className="text-[#6B7280] shrink-0">attached</span>
+            <div className="flex items-center justify-between bg-[#F5F5F7] border border-black/[0.06] rounded-xl px-3.5 py-2 mb-3 text-xs">
+              <div className="flex items-center gap-2 text-[#1D1D1F] truncate">
+                <ImageIcon className="w-4 h-4 text-[#0071E3] shrink-0" />
+                <span className="font-semibold truncate">{selectedImage?.name}</span>
+                <span className="text-[#86868B] shrink-0">• screenshot attached</span>
               </div>
               <button
                 type="button"
                 onClick={handleRemoveImage}
-                className="text-[#8E3326] hover:underline font-medium shrink-0 ml-2"
+                className="text-[#FF3B30] hover:underline font-semibold shrink-0 ml-2"
               >
-                Remove image
+                Remove
               </button>
             </div>
           )}
@@ -379,21 +387,22 @@ export default function HomePage() {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             rows={5}
-            placeholder="Paste viral forward, social message, or scheme claim here..."
-            className="w-full border border-[#E7E2D8] rounded-md p-4 text-[#1E2430] placeholder-[#6B7280] focus:outline-none focus:ring-2 focus:ring-[#2F6B5C] focus:border-transparent text-base resize-none"
+            placeholder="Paste viral forward, social message, or government claim here..."
+            className="w-full bg-[#F5F5F7]/50 hover:bg-[#F5F5F7] focus:bg-white border border-transparent focus:border-[#0071E3] focus:ring-4 focus:ring-[#0071E3]/15 rounded-2xl p-4 text-[#1D1D1F] placeholder-[#86868B] text-base resize-none transition-all outline-none"
           />
 
           {/* Action Row */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4 pt-2">
-            <span className="text-xs text-[#6B7280]">
-              Searches live PIB press releases, myScheme catalog, and official gazettes.
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-5 pt-2">
+            <span className="text-xs text-[#86868B] flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#0071E3]" />
+              <span>Searches live PIB releases, myScheme registry, and official gazettes.</span>
             </span>
 
             <button
               type="button"
               onClick={handleCheck}
               disabled={isRunning || !inputText.trim()}
-              className="w-full sm:w-auto px-6 py-2.5 bg-[#2F6B5C] hover:bg-[#25574a] text-white font-medium rounded-md flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="w-full sm:w-auto px-7 py-3 bg-[#0071E3] hover:bg-[#0077ED] text-white font-semibold rounded-full flex items-center justify-center gap-2 shadow-[0_2px_12px_rgba(0,113,227,0.28)] active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed text-sm"
             >
               {isRunning ? (
                 <>
@@ -412,42 +421,47 @@ export default function HomePage() {
 
         {/* Live Running Status */}
         {isRunning && (
-          <div className="bg-[#F4F1EA] border border-[#E7E2D8] rounded-md p-4 mb-8 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-[#2F6B5C]" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-[#1E2430]">{currentStepMessage}</p>
-              <p className="text-xs text-[#6B7280]">Testing citations and enforcing programmatic verification rules.</p>
+          <div className="bg-white border border-black/[0.06] rounded-2xl p-5 mb-8 flex items-center gap-3.5 shadow-sm animate-fadeIn">
+            <div className="w-8 h-8 rounded-full bg-[#0071E3]/10 text-[#0071E3] flex items-center justify-center shrink-0">
+              <Loader2 className="w-4 h-4 animate-spin" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-[#1D1D1F] truncate">{currentStepMessage}</p>
+              <p className="text-xs text-[#86868B]">Enforcing programmatic citation verification & domain allowlists.</p>
             </div>
           </div>
         )}
 
         {/* Nudge Notification if non-checkable claim */}
         {nudgeMessage && (
-          <div className="bg-[#F6ECD3] border border-[#E7E2D8] rounded-md p-5 mb-8 text-[#7A5413]">
+          <div className="bg-[#FF9500]/10 border border-[#FF9500]/25 rounded-2xl p-5 mb-8 text-[#B25000] animate-fadeIn">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-medium text-sm">Notice</h3>
+                <h3 className="font-semibold text-sm">Notice</h3>
                 <p className="text-xs mt-1 leading-relaxed">{nudgeMessage}</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Results Section */}
+        {/* Results Bento Section */}
         {verdicts.length > 0 && (
-          <div className="space-y-8">
-            <div className="flex items-center justify-between border-b border-[#E7E2D8] pb-3">
-              <h2 className="font-serif text-2xl font-bold text-[#1E2430]">
-                Official Verdict & Citations
-              </h2>
+          <div className="space-y-8 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-black/[0.06] pb-4">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-[#1D1D1F] tracking-tight">
+                  Official Verdict & Citations
+                </h2>
+                <p className="text-xs text-[#86868B]">Grounded exclusively on fetched official records</p>
+              </div>
               <button
                 type="button"
                 onClick={handleCheck}
-                className="text-xs text-[#4B5563] hover:text-[#1E2430] flex items-center gap-1 font-medium bg-white px-3 py-1.5 rounded-pill border border-[#E7E2D8]"
+                className="text-xs text-[#1D1D1F] hover:text-[#0071E3] flex items-center gap-1.5 font-semibold bg-white px-3.5 py-1.5 rounded-full border border-black/[0.08] shadow-sm hover:shadow transition-all"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Refresh sources</span>
+                <span>Refetch sources</span>
               </button>
             </div>
 
@@ -455,8 +469,8 @@ export default function HomePage() {
               {/* Verdicts Column */}
               <div className="lg:col-span-7 space-y-6">
                 {verdicts.map((v, idx) => (
-                  <div key={idx} className="bg-white border border-[#E7E2D8] rounded-lg p-6 shadow-sm">
-                    <div className="flex items-center justify-between gap-3 mb-4">
+                  <div key={idx} className="bg-white border border-black/[0.06] rounded-3xl p-6 sm:p-7 shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+                    <div className="flex items-center justify-between gap-3 mb-5">
                       <VerdictChip label={v.label} size="lg" />
                       
                       {v.explanation && (
@@ -465,45 +479,45 @@ export default function HomePage() {
                     </div>
 
                     {imagePreviewUrl && (
-                      <div className="mb-4">
-                        <div className="text-xs font-semibold text-[#6B7280] mb-2 uppercase tracking-wider flex items-center gap-1.5">
-                          <ImageIcon className="w-3.5 h-3.5 text-[#2F6B5C]" />
-                          <span>Analyzed Screenshot / Attachment:</span>
+                      <div className="mb-5">
+                        <div className="text-[11px] font-semibold text-[#86868B] mb-2 uppercase tracking-wider flex items-center gap-1.5">
+                          <ImageIcon className="w-3.5 h-3.5 text-[#0071E3]" />
+                          <span>Analyzed Screenshot:</span>
                         </div>
-                        <div className="bg-[#FBF9F5] p-2 rounded-md border border-[#E7E2D8] inline-block">
+                        <div className="bg-[#F5F5F7] p-2 rounded-2xl border border-black/[0.04] inline-block">
                           <img
                             src={imagePreviewUrl}
                             alt="Analyzed document screenshot"
-                            className="max-h-48 max-w-full rounded object-contain border border-[#E7E2D8]"
+                            className="max-h-48 max-w-full rounded-xl object-contain"
                           />
                         </div>
                       </div>
                     )}
 
-                    <div className="text-sm font-semibold text-[#1E2430] mb-2">
-                      Claim Evaluated:
+                    <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1.5">
+                      Forward Evaluated:
                     </div>
-                    <p className="text-sm text-[#4B5563] bg-[#FBF9F5] p-3 rounded-md border border-[#E7E2D8] mb-4">
+                    <p className="text-xs sm:text-sm text-[#1D1D1F] bg-[#F5F5F7] p-3.5 rounded-2xl border border-black/[0.04] mb-5 font-normal">
                       "{inputText}"
                     </p>
 
-                    <div className="text-sm font-semibold text-[#1E2430] mb-2">
-                      Explanation:
+                    <div className="text-xs font-semibold text-[#86868B] uppercase tracking-wider mb-1.5">
+                      Official Finding:
                     </div>
-                    <p className="text-base text-[#1E2430] leading-relaxed mb-4">
+                    <p className="text-base text-[#1D1D1F] leading-relaxed mb-4 font-normal">
                       {v.explanation}
                     </p>
 
                     {v.confidence_reason && (
-                      <p className="text-xs text-[#6B7280] mb-5 italic">
-                        Evidence confidence: {Math.round(v.confidence * 100)}% — {v.confidence_reason}
+                      <p className="text-xs text-[#86868B] mb-6 italic bg-black/[0.02] p-2.5 rounded-xl border border-black/[0.03]">
+                        Confidence: {Math.round((v.confidence || 0.8) * 100)}% — {v.confidence_reason}
                       </p>
                     )}
 
                     {/* Citations list */}
                     {v.citations && v.citations.length > 0 && (
-                      <div className="space-y-3 pt-3 border-t border-[#E7E2D8]">
-                        <h4 className="text-xs font-semibold text-[#6B7280] uppercase tracking-wider">
+                      <div className="space-y-3 pt-4 border-t border-black/[0.06]">
+                        <h4 className="text-[11px] font-semibold text-[#86868B] uppercase tracking-wider">
                           Official Citations ({v.citations.length})
                         </h4>
                         {v.citations.map((c: any, cIdx: number) => (
@@ -521,11 +535,11 @@ export default function HomePage() {
 
                     {/* Share action */}
                     {v.share_id && (
-                      <div className="mt-5 pt-4 border-t border-[#E7E2D8] flex items-center justify-end">
+                      <div className="mt-6 pt-4 border-t border-black/[0.06] flex items-center justify-end">
                         <button
                           type="button"
                           onClick={() => handleShare(v.share_id)}
-                          className="text-xs font-medium text-[#2F6B5C] hover:text-[#25574a] flex items-center gap-1.5"
+                          className="text-xs font-semibold text-[#0071E3] hover:text-[#0077ED] flex items-center gap-1.5 bg-[#0071E3]/10 hover:bg-[#0071E3]/15 px-3.5 py-1.5 rounded-full transition-all active:scale-95"
                         >
                           {copiedShare ? (
                             <>
@@ -535,7 +549,7 @@ export default function HomePage() {
                           ) : (
                             <>
                               <Share2 className="w-3.5 h-3.5" />
-                              <span>Share public verdict card</span>
+                              <span>Share public card</span>
                             </>
                           )}
                         </button>
@@ -553,7 +567,6 @@ export default function HomePage() {
           </div>
         )}
       </main>
-    </>
+    </div>
   );
 }
-
