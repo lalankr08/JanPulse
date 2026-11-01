@@ -97,9 +97,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       if (activeTab === 'signup') {
         // Sign Up
+        const redirectUrl = typeof window !== 'undefined' ? (window.location.origin + '/account') : undefined;
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password: password.trim(),
+          options: {
+            emailRedirectTo: redirectUrl,
+          },
         });
 
         if (error) {
@@ -174,9 +178,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       // 2. If user doesn't exist yet, create it
+      const redirectUrl = typeof window !== 'undefined' ? (window.location.origin + '/account') : undefined;
       const signUpRes = await supabase.auth.signUp({
         email: demoEmail,
         password: demoPass,
+        options: {
+          emailRedirectTo: redirectUrl,
+        },
       });
 
       if (signUpRes.data.session) {

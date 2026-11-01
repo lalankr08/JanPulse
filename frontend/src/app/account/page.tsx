@@ -99,6 +99,9 @@ export default function AccountPage() {
     window.addEventListener('janpulse_language_changed', handleLangChange);
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setAuthPreference('authenticated');
+      }
       setUser(session?.user ?? null);
       loadData();
     });

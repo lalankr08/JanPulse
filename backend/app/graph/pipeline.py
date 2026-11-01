@@ -597,32 +597,35 @@ Keep all names, official schemes, dates, amounts, and facts exact without adding
             share_id = f"s_guest_{uuid.uuid4().hex[:8]}"
             
             if state.persist_to_db:
-                claim_row = Database.execute_one(
-                    "SELECT id FROM claims WHERE run_id = %s LIMIT 1",
-                    (state.run_id,)
-                )
-                claim_id = claim_row["id"] if claim_row else None
-                
-                if claim_id:
-                    v_row = Database.execute_one(
-                        """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s)
-                           RETURNING id, share_id""",
-                        (claim_id, state.run_id, v.label, v.confidence, v.confidence_reason, v.explanation, state.target_language)
+                try:
+                    claim_row = Database.execute_one(
+                        "SELECT id FROM claims WHERE run_id = %s LIMIT 1",
+                        (state.run_id,)
                     )
-                    if v_row:
-                        verdict_id = str(v_row["id"])
-                        share_id = v_row["share_id"]
+                    claim_id = claim_row["id"] if claim_row else None
                     
-                    for cit in v.citations:
-                        chunk = state.chunks_by_id.get(cit.chunk_id)
-                        source_id = chunk.get("source_id") if chunk else None
-                        if source_id:
-                            Database.execute_query(
-                                """INSERT INTO citations (verdict_id, source_id, chunk_id, role, span, fetched_at)
-                                   VALUES (%s, %s, %s, %s, %s, NOW())""",
-                                (verdict_id, source_id, cit.chunk_id, cit.role, cit.verbatim_span)
-                            )
+                    if claim_id:
+                        v_row = Database.execute_one(
+                            """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
+                               VALUES (%s, %s, %s, %s, %s, %s, %s)
+                               RETURNING id, share_id""",
+                            (claim_id, state.run_id, v.label, v.confidence, v.confidence_reason, v.explanation, state.target_language)
+                        )
+                        if v_row:
+                            verdict_id = str(v_row["id"])
+                            share_id = v_row["share_id"]
+                        
+                        for cit in v.citations:
+                            chunk = state.chunks_by_id.get(cit.chunk_id)
+                            source_id = chunk.get("source_id") if chunk else None
+                            if source_id:
+                                Database.execute_query(
+                                    """INSERT INTO citations (verdict_id, source_id, chunk_id, role, span, fetched_at)
+                                       VALUES (%s, %s, %s, %s, %s, NOW())""",
+                                    (verdict_id, source_id, cit.chunk_id, cit.role, cit.verbatim_span)
+                                )
+                except Exception as db_err:
+                    print(f"[JanPulsePipeline] Warning: DB insert for verdict failed: {db_err}", flush=True)
 
             citations_data = []
             for cit in v.citations:

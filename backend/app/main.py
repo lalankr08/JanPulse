@@ -22,10 +22,10 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# CORS
+# CORS - support all local and deployed web origins (including Vercel preview URLs)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://.*$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -213,10 +213,19 @@ async def thread_followup(run_id: str, payload: FollowupRequest, user: dict = De
         input_type="text"
     )
     async def followup_gen():
+        yield f": {' ' * 2048}\n\n"
         async for event in JanPulsePipeline.run(state):
             yield f"event: {event.get('type')}\ndata: {json.dumps(event)}\n\n"
 
-    return StreamingResponse(followup_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        followup_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 @app.post("/v1/refresh")
 def force_refresh_sources(run_id: str, user: dict = Depends(verify_jwt)):
