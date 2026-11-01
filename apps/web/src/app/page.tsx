@@ -9,7 +9,7 @@ import { AudioPlayer } from '@/components/AudioPlayer';
 import { createRunStream, transcribeAudioBlob, extractImageText, syncHistoryToCloud } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
 import { 
-  getLocalHistory, addLocalHistoryItem, getAuthPreference, 
+  getLocalHistory, addLocalHistoryItem, getAuthPreference, setAuthPreference,
   getUnsyncedItems, markItemsAsSynced, clearLocalHistory, LocalHistoryItem 
 } from '@/lib/historyStore';
 import { AuthModal } from '@/components/AuthModal';
@@ -60,8 +60,8 @@ export default function HomePage() {
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       setUser(user);
       if (!user && !pref) {
-        // Prompt user on entry: sign in to save history or continue as guest
-        setShowAuthPrompt(true);
+        // Default to private guest mode on first entry without disruptive modal popup
+        setAuthPreference('guest');
       } else if (user) {
         // Authenticated: sync any unsynced local guest items
         const unsynced = getUnsyncedItems();

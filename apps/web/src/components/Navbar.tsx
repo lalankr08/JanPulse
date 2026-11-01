@@ -15,11 +15,11 @@ interface NavbarProps {
 
 const LANGUAGES = [
   { code: 'en', label: 'EN' },
-  { code: 'hi', label: 'हिन्दी' },
-  { code: 'ta', label: 'தமிழ்' },
-  { code: 'te', label: 'తెలుగు' },
-  { code: 'bn', label: 'বাংলা' },
-  { code: 'mr', label: 'मराठी' },
+  { code: 'hi', label: 'HI' },
+  { code: 'ta', label: 'TA' },
+  { code: 'te', label: 'TE' },
+  { code: 'bn', label: 'BN' },
+  { code: 'mr', label: 'MR' },
 ];
 
 export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
@@ -28,10 +28,17 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
   const [user, setUser] = useState<any>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+  const refreshUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
-    });
+    } catch {
+      setUser(null);
+    }
+  };
+
+  useEffect(() => {
+    refreshUser();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
@@ -45,40 +52,31 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setAuthPreference('guest');
+    setUser(null);
   };
 
   const navLinks = [
     { href: '/', label: 'Forward Checker' },
-    { href: '/schemes', label: 'Scheme Wizard' },
-    { href: '/explain', label: 'Notifications' },
-    { href: '/about', label: 'Sources & Ethics' },
-    { href: '/account', label: 'History' },
+    { href: '/schemes', label: 'Schemes' },
+    { href: '/explain', label: 'Gazette Explainer' },
+    { href: '/account', label: 'History & Privacy' },
+    { href: '/about', label: 'Sources' },
   ];
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/80 border-b border-black/[0.06] transition-all">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#0071E3] to-[#1E88E5] flex items-center justify-center text-white shadow-sm shadow-[#0071E3]/25 group-hover:scale-105 transition-transform">
-              <ShieldCheck className="w-4 h-4 stroke-[2.2]" />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-[17px] text-[#1D1D1F] tracking-tight group-hover:text-[#0071E3] transition-colors leading-tight">
-                Jan-Pulse
-              </span>
-              <span className="text-[10px] text-[#86868B] font-medium tracking-normal">
-                Civic Intelligence
-              </span>
-            </div>
-          </Link>
-          <span className="hidden lg:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-black/[0.04] text-[11px] font-medium text-[#86868B]">
-            Official Record
+    <header className="sticky top-0 z-40 w-full backdrop-blur-xl bg-white/80 border-b border-black/[0.06] transition-all">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
+        {/* Brand Logo */}
+        <Link href="/" className="flex items-center gap-2.5 group shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-[#0071E3] flex items-center justify-center text-white shadow-apple-sm transition-transform duration-200 group-hover:scale-105">
+            <ShieldCheck className="w-5 h-5 stroke-[2.2]" />
+          </div>
+          <span className="font-bold text-base tracking-tight text-[#1D1D1F]">
+            Jan-Pulse
           </span>
-        </div>
+        </Link>
 
-        {/* Desktop Links */}
+        {/* Desktop Links (Apple-style segmented navigation) */}
         <nav className="hidden md:flex items-center gap-1 bg-black/[0.03] p-1 rounded-full border border-black/[0.04]">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
@@ -86,7 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-medium transition-all ${
+                className={`px-3.5 py-1.5 text-xs rounded-full transition-all duration-150 ${
                   isActive
                     ? 'bg-white text-[#1D1D1F] shadow-[0_1px_3px_rgba(0,0,0,0.08)] font-semibold'
                     : 'text-[#6E6E73] hover:text-[#1D1D1F] hover:bg-white/50'
@@ -123,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
             <div className="hidden sm:flex items-center gap-1.5 pl-1">
               <Link
                 href="/account"
-                className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20 hover:bg-[#34C759]/15 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20 hover:bg-[#34C759]/15 transition-all"
                 title={`Logged in as ${user.email} (Saved to Account)`}
               >
                 <Cloud className="w-3.5 h-3.5" />
@@ -143,11 +141,11 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
               <button
                 type="button"
                 onClick={() => setIsAuthModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-black/[0.04] text-[#1D1D1F] hover:bg-black/[0.08] border border-black/[0.06] transition-all"
-                title="Guest Mode: Searches saved on this device only. Click to sign in and save to account."
+                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-full bg-[#0071E3] text-white hover:bg-[#0077ED] shadow-apple-sm transition-all active:scale-95"
+                title="Sign In or Create Account to save checks across devices"
               >
-                <Lock className="w-3 h-3 text-[#86868B]" />
-                <span>Guest / Sign In</span>
+                <User className="w-3.5 h-3.5" />
+                <span>Sign In</span>
               </button>
             </div>
           )}
@@ -188,15 +186,22 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
           <div className="pt-3 border-t border-black/[0.06]">
             {user ? (
               <div className="flex items-center justify-between px-2 py-1">
-                <div className="flex items-center gap-2">
+                <Link
+                  href="/account"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center gap-2"
+                >
                   <Cloud className="w-4 h-4 text-[#248A3D]" />
                   <span className="text-xs text-[#1D1D1F] font-semibold truncate max-w-[180px]">
                     {user.email}
                   </span>
-                </div>
+                </Link>
                 <button
                   type="button"
-                  onClick={handleSignOut}
+                  onClick={async () => {
+                    await handleSignOut();
+                    setMobileMenuOpen(false);
+                  }}
                   className="text-xs font-semibold text-[#FF3B30] hover:underline"
                 >
                   Sign Out
@@ -209,7 +214,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
                   setMobileMenuOpen(false);
                   setIsAuthModalOpen(true);
                 }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-[#0071E3] text-white"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-[#0071E3] text-white shadow-apple-sm"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>Sign In or Save History</span>
@@ -224,6 +229,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         initialView="auth"
+        onAuthSuccess={refreshUser}
       />
     </header>
   );
