@@ -1,0 +1,37 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load from root .env if present
+root_env = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+if root_env.exists():
+    load_dotenv(dotenv_path=root_env)
+else:
+    load_dotenv()
+
+class Settings:
+    SUPABASE_URI: str = os.getenv("SUPABASE_URI", "")
+    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "https://ocrabtnpbkbnbgccvqjr.supabase.co")
+    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+    SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")
+    
+    # API Keys
+    GROQ_API_KEY: str = os.getenv("GROQ_API", os.getenv("GROQ_API_KEY", ""))
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API", os.getenv("GEMINI_API_KEY", ""))
+    DATA_GOV_IN_API_KEY: str = os.getenv("DATA_GOV_IN_API_KEY", "")
+    MYSCHEME_API_KEY: str = os.getenv("MYSCHEME_API_KEY", "tYTy5eEhlu9rFjyxuCr7ra7ACp4dv1RH8gWuHTDc")
+    
+    # Models
+    GROQ_MODEL_MAIN: str = os.getenv("GROQ_MODEL_MAIN", "openai/gpt-oss-120b")
+    GROQ_MODEL_FAST: str = os.getenv("GROQ_MODEL_FAST", "openai/gpt-oss-20b")
+    GROQ_MODEL_VISION: str = os.getenv("GROQ_MODEL_VISION", "meta-llama/llama-prompt-guard-2-86m")
+    GROQ_STT_MODEL: str = os.getenv("GROQ_STT_MODEL", "whisper-large-v3")
+    GROQ_TTS_MODEL: str = os.getenv("GROQ_TTS_MODEL", "canopylabs/orpheus-v1-english")
+    
+    GEMINI_MODEL_LONG: str = os.getenv("GEMINI_MODEL_LONG", "models/gemini-3.8-flash")
+    GEMINI_EMBED_MODEL: str = os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
+    EMBED_DIM: int = int(os.getenv("EMBED_DIM", "768"))
+    
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:3001", "https://janpulse.vercel.app"]
+
+settings = Settings()
