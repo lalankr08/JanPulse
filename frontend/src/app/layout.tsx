@@ -3,8 +3,24 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://janpulse.lalankr.in'),
-  title: 'Jan-Pulse — Civic Intelligence and Verification for Indian Citizens',
+  title: {
+    default: 'Jan-Pulse — Civic Intelligence and Verification for Indian Citizens',
+    template: '%s | Jan-Pulse'
+  },
   description: 'Verify viral forwards, check scheme eligibility, and understand government notifications against official public records.',
+  openGraph: {
+    title: 'Jan-Pulse — Civic Intelligence and Verification for Indian Citizens',
+    description: 'Verify viral WhatsApp forwards, check scheme eligibility, and understand government notifications against official PIB and gazette records.',
+    url: 'https://janpulse.lalankr.in',
+    siteName: 'Jan-Pulse Civic Verification',
+    locale: 'en_IN',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Jan-Pulse — Civic Intelligence and Verification for Indian Citizens',
+    description: 'Verify viral WhatsApp forwards, check scheme eligibility, and understand government notifications against official PIB and gazette records.',
+  },
 };
 
 export default function RootLayout({
