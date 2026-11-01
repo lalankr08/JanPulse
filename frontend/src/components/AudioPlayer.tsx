@@ -45,6 +45,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
       return;
     }
 
+    // 1. Primary: 100% Client-side browser speech synthesis (0 API tokens, 0 server cost, instant)
+    if (typeof window !== "undefined" && 'speechSynthesis' in window) {
+      playBrowserSpeech();
+      return;
+    }
+
+    // 2. Fallback: Only call server Groq TTS if browser completely lacks speech synthesis
     if (language === "en") {
       try {
         setIsLoading(true);
@@ -65,12 +72,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
         await audio.play();
         setIsPlaying(true);
         setIsLoading(false);
-      } catch (e) {
-        console.warn("Groq Orpheus playback fallback to browser speech:", e);
-        playBrowserSpeech();
+      } catch {
+        setIsPlaying(false);
+        setIsLoading(false);
       }
-    } else {
-      playBrowserSpeech();
     }
   };
 
@@ -79,8 +84,16 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ text, language = "en" 
     window.speechSynthesis.cancel();
     
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language === "hi" ? "hi-IN" : language;
-    utterance.rate = 0.95;
+    utterance.lang = language === "hi" ? "hi-IN" : "en-IN";
+    utterance.rate = 0.98;
+
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      const matched = voices.find(v => v.lang.replace('_', '-').startsWith(language === "hi" ? "hi" : "en"));
+      if (matched) utterance.voice = matched;
+    } catch {
+      // Use default device voice
+    }
     
     utterance.onstart = () => {
       setIsPlaying(true);

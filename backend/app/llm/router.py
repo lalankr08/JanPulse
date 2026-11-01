@@ -43,24 +43,34 @@ class ModelRouter:
         route_to_gemini_first = token_estimate > 12000 or not self.groq_client
 
         if not route_to_gemini_first and self.groq_client:
+            schema_json = response_model.model_json_schema()
             try:
-                # Call Groq with strict JSON schema mode
-                schema_json = response_model.model_json_schema()
-                response = self.groq_client.chat.completions.create(
-                    model=groq_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": response_model.__name__.lower(),
-                            "schema": schema_json
-                        }
-                    },
-                    temperature=0.1
-                )
+                try:
+                    response = self.groq_client.chat.completions.create(
+                        model=groq_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format={
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": response_model.__name__.lower(),
+                                "schema": schema_json
+                            }
+                        },
+                        temperature=0.1
+                    )
+                except Exception:
+                    response = self.groq_client.chat.completions.create(
+                        model=groq_model,
+                        messages=[
+                            {"role": "system", "content": f"{system_prompt}\nReturn valid JSON adhering to schema: {json.dumps(schema_json)}"},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.1
+                    )
                 raw_json = response.choices[0].message.content
                 parsed = response_model.model_validate_json(raw_json)
                 return parsed, groq_model

@@ -527,9 +527,11 @@ Evidence & Operative Clauses (Extracted via Gazette RAG):
             # Node 6: Judge
             yield {"type": "step_start", "node": "judge", "message": "Evaluating claims against retrieved evidence..."}
             
+            # Cap chunks to top 5 and truncate length to save 60-70% prompt tokens
+            capped_chunks = unique_chunks[:5]
             evidence_blocks = "\n\n".join([
-                f"[Chunk ID: {c['chunk_id']}] (Source: {c.get('source_url', 'official')})\n{c['content']}"
-                for c in unique_chunks
+                f"[Chunk ID: {c['chunk_id']}] (Source: {c.get('source_url', 'official')})\n{c['content'][:750]}"
+                for c in capped_chunks
             ])
             clean_evidence = sanitize_untrusted_text(evidence_blocks)
 

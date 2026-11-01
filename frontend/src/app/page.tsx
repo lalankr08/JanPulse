@@ -41,6 +41,7 @@ export default function HomePage() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const speechRecognitionRef = useRef<any>(null);
 
   // Execution state
   const [isRunning, setIsRunning] = useState(false);
@@ -149,8 +150,47 @@ export default function HomePage() {
     }
   };
 
-  // Voice recording handlers
+  // Voice recording handlers (Local zero-token SpeechRecognition primary, Whisper fallback)
   const startRecording = async () => {
+    // 1. Primary: Browser native SpeechRecognition (0 API tokens, 0 server calls, instant)
+    if (typeof window !== 'undefined') {
+      const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRec) {
+        try {
+          const recognition = new SpeechRec();
+          recognition.lang = language === 'hi' ? 'hi-IN' : 'en-IN';
+          recognition.continuous = true;
+          recognition.interimResults = true;
+
+          recognition.onresult = (e: any) => {
+            let transcript = '';
+            for (let i = 0; i < e.results.length; i++) {
+              transcript += e.results[i][0].transcript;
+            }
+            if (transcript.trim()) {
+              setInputText(transcript.trim());
+            }
+          };
+
+          recognition.onerror = () => {
+            setIsRecording(false);
+          };
+
+          recognition.onend = () => {
+            setIsRecording(false);
+          };
+
+          recognition.start();
+          speechRecognitionRef.current = recognition;
+          setIsRecording(true);
+          return;
+        } catch {
+          // Fall through to MediaRecorder if recognition permission fails
+        }
+      }
+    }
+
+    // 2. Secondary fallback: MediaRecorder with server Whisper
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -182,11 +222,17 @@ export default function HomePage() {
   };
 
   const stopRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(t => t.stop());
-      setIsRecording(false);
     }
+    setIsRecording(false);
   };
 
   // Run pipeline
