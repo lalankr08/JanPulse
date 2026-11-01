@@ -10,7 +10,8 @@ export function getApiBase(): string {
     if (!u.startsWith('http://') && !u.startsWith('https://')) {
       u = 'https://' + u;
     }
-    return u.replace(/\/+$/, '');
+    // Automatically sanitize and strip any accidental /docs or trailing slashes
+    return u.replace(/\/docs\/?$/i, '').replace(/\/+$/, '');
   }
 
   // If running in browser and NOT on localhost, automatically route to production Render API
