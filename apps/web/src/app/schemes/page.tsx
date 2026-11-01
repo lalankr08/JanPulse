@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { createRunStream } from '@/lib/api';
+import { addLocalHistoryItem } from '@/lib/historyStore';
 import { 
   Building2, CheckCircle2, XCircle, HelpCircle, ArrowRight, 
   Loader2, Sparkles, FileCheck, Layers, ExternalLink, Search, Check, AlertTriangle
@@ -42,6 +43,13 @@ export default function SchemesPage() {
             setSchemes(list);
             setIsLoading(false);
             setCurrentStepMessage('');
+
+            addLocalHistoryItem({
+              query,
+              kind: 'eligibility',
+              label: list[0]?.scheme_name || 'Scheme Match',
+              explanation: list[0]?.benefit_summary || `Found ${list.length} eligible schemes`
+            }, Boolean(event.saved_to_cloud));
           }
         },
         (err) => {

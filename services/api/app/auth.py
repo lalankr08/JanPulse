@@ -26,7 +26,7 @@ def verify_jwt(
 
     # If no token provided, return anonymous citizen session
     if not credentials or not credentials.credentials:
-        return {"sub": anon_user_id, "role": "anon", "is_anon": True}
+        return {"sub": anon_user_id, "role": "anon", "is_anon": True, "is_guest": True, "is_authenticated": False}
 
     token = credentials.credentials.strip()
     try:
@@ -39,6 +39,8 @@ def verify_jwt(
                 "sub": anon_user_id,
                 "role": "anon",
                 "is_anon": True,
+                "is_guest": True,
+                "is_authenticated": False,
                 "ref": unverified.get("ref", "supabase")
             }
 
@@ -53,17 +55,27 @@ def verify_jwt(
                 )
                 if "sub" in payload:
                     payload["sub"] = get_valid_uuid(payload["sub"])
+                payload["is_authenticated"] = True
+                payload["is_guest"] = False
+                payload["is_anon"] = False
                 return payload
             except Exception:
                 pass
 
         # 3. User token with subject / user id
-        sub_raw = unverified.get("sub") or unverified.get("id") or f"anon-{client_ip}"
-        unverified["sub"] = get_valid_uuid(str(sub_raw))
-        return unverified
+        sub_raw = unverified.get("sub") or unverified.get("id")
+        if sub_raw and unverified.get("role") == "authenticated":
+            unverified["sub"] = get_valid_uuid(str(sub_raw))
+            unverified["is_authenticated"] = True
+            unverified["is_guest"] = False
+            unverified["is_anon"] = False
+            return unverified
+        
+        # Fallback to guest
+        return {"sub": anon_user_id, "role": "anon", "is_anon": True, "is_guest": True, "is_authenticated": False}
 
     except jwt.ExpiredSignatureError:
-        return {"sub": anon_user_id, "role": "anon", "is_anon": True}
+        return {"sub": anon_user_id, "role": "anon", "is_anon": True, "is_guest": True, "is_authenticated": False}
     except Exception as e:
-        print(f"[Auth] Token parsing error: {e}. Defaulting to anon session.")
-        return {"sub": anon_user_id, "role": "anon", "is_anon": True}
+        print(f"[Auth] Token parsing error: {e}. Defaulting to guest session.")
+        return {"sub": anon_user_id, "role": "anon", "is_anon": True, "is_guest": True, "is_authenticated": False}

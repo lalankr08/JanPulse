@@ -1,5 +1,6 @@
 import json
 import asyncio
+import uuid
 from typing import Optional, Literal
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, Response, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -42,6 +43,20 @@ class EligibilityAnswerRequest(BaseModel):
 class FollowupRequest(BaseModel):
     question: str
 
+class SyncHistoryItem(BaseModel):
+    id: Optional[str] = None
+    query: str
+    kind: str = "forward"
+    language: str = "en"
+    label: Optional[str] = None
+    explanation: Optional[str] = None
+    confidence: Optional[float] = None
+    confidence_reason: Optional[str] = None
+    created_at: Optional[str] = None
+
+class SyncHistoryRequest(BaseModel):
+    items: list[SyncHistoryItem]
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "jan-pulse-api", "version": "2.0.0"}
@@ -51,23 +66,28 @@ async def create_run(
     payload: RunCreateRequest,
     user: dict = Depends(verify_jwt)
 ):
+    is_authenticated = user.get("is_authenticated", False)
     user_id = user.get("sub", "anon-user")
 
-    # Insert into queries
-    q_row = Database.execute_one(
-        """INSERT INTO queries (user_id, input_type, raw_text, detected_lang)
-           VALUES (%s, %s, %s, %s) RETURNING id""",
-        (user_id, payload.input_type, payload.input_text, payload.language)
-    )
-    query_id = q_row["id"] if q_row else None
+    if is_authenticated:
+        # Authenticated user: Record query & run in cloud database
+        q_row = Database.execute_one(
+            """INSERT INTO queries (user_id, input_type, raw_text, detected_lang)
+               VALUES (%s, %s, %s, %s) RETURNING id""",
+            (user_id, payload.input_type, payload.input_text, payload.language)
+        )
+        query_id = q_row["id"] if q_row else None
 
-    # Insert into agent_runs
-    run_row = Database.execute_one(
-        """INSERT INTO agent_runs (query_id, user_id, kind, status, graph_version)
-           VALUES (%s, %s, %s, 'running', 'v2') RETURNING id""",
-        (query_id, user_id, payload.kind)
-    )
-    run_id = str(run_row["id"])
+        run_row = Database.execute_one(
+            """INSERT INTO agent_runs (query_id, user_id, kind, status, graph_version)
+               VALUES (%s, %s, %s, 'running', 'v2') RETURNING id""",
+            (query_id, user_id, payload.kind)
+        )
+        run_id = str(run_row["id"]) if run_row else str(uuid.uuid4())
+    else:
+        # Guest user: Generate ephemeral UUID, strictly ZERO database inserts
+        query_id = None
+        run_id = str(uuid.uuid4())
 
     state = PipelineState(
         run_id=run_id,
@@ -76,7 +96,8 @@ async def create_run(
         raw_input=payload.input_text,
         input_type=payload.input_type,
         target_language=payload.language,
-        detected_language=payload.language
+        detected_language=payload.language,
+        persist_to_db=is_authenticated
     )
 
     async def event_generator():
@@ -92,7 +113,8 @@ async def create_run(
             err_data = {"type": "error", "message": str(e)}
             yield f"event: error\ndata: {json.dumps(err_data)}\n\n"
             try:
-                Database.execute_query("UPDATE agent_runs SET status = 'failed' WHERE id = %s", (run_id,))
+                if state.persist_to_db:
+                    Database.execute_query("UPDATE agent_runs SET status = 'failed' WHERE id = %s", (run_id,))
             except Exception as db_err:
                 print(f"[Main API] Failed to mark run {run_id} failed: {db_err}", flush=True)
 
@@ -218,6 +240,41 @@ async def extract_image_ocr(
             "message": "Image loaded. (AI OCR service is temporarily busy; you can type or verify your claim below)."
         }
 
+@app.post("/v1/documents/extract")
+async def extract_document_endpoint(
+    file: UploadFile = File(...),
+    user: dict = Depends(verify_jwt)
+):
+    """
+    Extracts text and structure from uploaded official documents (.pdf, .docx, .doc, .txt).
+    Uses Python pypdf and python-docx modules with multimodal vision OCR fallback for scanned gazettes.
+    """
+    try:
+        file_bytes = await file.read()
+        filename = file.filename or "document.pdf"
+        
+        from app.tools.egazette import extract_document_text
+        text, pages, doc_type = extract_document_text(file_bytes, filename=filename)
+        
+        word_count = len(text.split())
+        return {
+            "status": "success",
+            "filename": filename,
+            "doc_type": doc_type,
+            "pages": pages,
+            "word_count": word_count,
+            "text": text,
+            "preview": text[:500] if text else ""
+        }
+    except Exception as e:
+        print(f"[DocumentExtract] Error extracting document: {e}")
+        return {
+            "status": "error",
+            "filename": file.filename or "document.pdf",
+            "message": f"Could not extract text: {e}",
+            "text": ""
+        }
+
 @app.post("/v1/transcribe")
 async def transcribe_audio_endpoint(
     file: UploadFile = File(...),
@@ -263,6 +320,77 @@ def get_public_share(share_id: str):
     )
     verdict["citations"] = citations
     return {"share_card": verdict}
+
+
+@app.get("/v1/me/history")
+def get_user_history(user: dict = Depends(verify_jwt)):
+    if not user.get("is_authenticated"):
+        return {"history": [], "is_guest": True, "message": "Guest history is kept locally on your device only."}
+    
+    user_id = user["sub"]
+    rows = Database.execute_query(
+        """SELECT q.id as query_id, q.raw_text, q.created_at, r.id as run_id, r.kind, r.status,
+                  v.label as verdict_label, v.confidence, v.explanation
+           FROM queries q
+           LEFT JOIN agent_runs r ON r.query_id = q.id
+           LEFT JOIN verdicts v ON v.run_id = r.id
+           WHERE q.user_id = %s
+           ORDER BY q.created_at DESC LIMIT 50""",
+        (user_id,)
+    )
+    return {"history": rows, "is_guest": False, "count": len(rows)}
+
+@app.post("/v1/me/sync-history")
+def sync_local_history_to_cloud(payload: SyncHistoryRequest, user: dict = Depends(verify_jwt)):
+    if not user.get("is_authenticated"):
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required to sync local history to cloud database."
+        )
+    
+    user_id = user["sub"]
+    synced_ids = []
+    
+    for it in payload.items:
+        try:
+            # 1. Insert query
+            q_row = Database.execute_one(
+                """INSERT INTO queries (user_id, input_type, raw_text, detected_lang)
+                   VALUES (%s, 'text', %s, %s) RETURNING id""",
+                (user_id, it.query, it.language)
+            )
+            query_id = q_row["id"] if q_row else None
+            
+            # 2. Insert run
+            r_row = Database.execute_one(
+                """INSERT INTO agent_runs (query_id, user_id, kind, status, graph_version)
+                   VALUES (%s, %s, %s, 'completed', 'v2') RETURNING id""",
+                (query_id, user_id, it.kind)
+            )
+            run_id = str(r_row["id"]) if r_row else str(uuid.uuid4())
+            
+            # 3. If verdict label exists, record claim and verdict
+            if it.label:
+                c_row = Database.execute_one(
+                    """INSERT INTO claims (run_id, claim_text, claim_text_en, kind)
+                       VALUES (%s, %s, %s, %s) RETURNING id""",
+                    (run_id, it.query, it.query, it.kind)
+                )
+                claim_id = c_row["id"] if c_row else None
+                
+                Database.execute_query(
+                    """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                    (claim_id, run_id, it.label, float(it.confidence or 0.95),
+                     it.confidence_reason or "Synced from local device session",
+                     it.explanation or "Verified fact", it.language)
+                )
+            if it.id:
+                synced_ids.append(it.id)
+        except Exception as e:
+            print(f"[Sync] Failed to sync item '{it.query}': {e}")
+            
+    return {"status": "success", "synced_ids": synced_ids, "synced_count": len(synced_ids)}
 
 @app.delete("/v1/me/history")
 def delete_user_history(user: dict = Depends(verify_jwt)):

@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ShieldCheck, Menu, X, Sparkles } from 'lucide-react';
+import { ShieldCheck, Menu, X, User, Lock, Cloud, LogOut, LogIn } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { setAuthPreference } from '@/lib/historyStore';
+import { AuthModal } from '@/components/AuthModal';
 
 interface NavbarProps {
   language: string;
@@ -22,6 +25,27 @@ const LANGUAGES = [
 export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setAuthPreference('guest');
+  };
 
   const navLinks = [
     { href: '/', label: 'Forward Checker' },
@@ -54,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
           </span>
         </div>
 
-        {/* Desktop Links (Apple-style pill navigation) */}
+        {/* Desktop Links */}
         <nav className="hidden md:flex items-center gap-1 bg-black/[0.03] p-1 rounded-full border border-black/[0.04]">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
@@ -74,7 +98,7 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
           })}
         </nav>
 
-        {/* Right side controls: Language switcher + Mobile menu trigger */}
+        {/* Right side controls: Language switcher + Auth + Mobile toggle */}
         <div className="flex items-center gap-2">
           {/* Segmented language capsule */}
           <div className="flex items-center bg-black/[0.04] p-0.5 rounded-full border border-black/[0.04]">
@@ -93,6 +117,40 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
               </button>
             ))}
           </div>
+
+          {/* Auth Capsule */}
+          {user ? (
+            <div className="hidden sm:flex items-center gap-1.5 pl-1">
+              <Link
+                href="/account"
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-[#34C759]/10 text-[#248A3D] border border-[#34C759]/20 hover:bg-[#34C759]/15 transition-all"
+                title={`Logged in as ${user.email} (Saved to Account)`}
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span className="max-w-[100px] truncate">{user.email?.split('@')[0]}</span>
+              </Link>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="p-1.5 text-[#86868B] hover:text-[#FF3B30] rounded-full hover:bg-black/[0.04] transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-1.5 pl-1">
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-full bg-black/[0.04] text-[#1D1D1F] hover:bg-black/[0.08] border border-black/[0.06] transition-all"
+                title="Guest Mode: Searches saved on this device only. Click to sign in and save to account."
+              >
+                <Lock className="w-3 h-3 text-[#86868B]" />
+                <span>Guest / Sign In</span>
+              </button>
+            </div>
+          )}
 
           {/* Mobile menu toggle */}
           <button
@@ -126,8 +184,47 @@ export const Navbar: React.FC<NavbarProps> = ({ language, setLanguage }) => {
               </Link>
             );
           })}
+
+          <div className="pt-3 border-t border-black/[0.06]">
+            {user ? (
+              <div className="flex items-center justify-between px-2 py-1">
+                <div className="flex items-center gap-2">
+                  <Cloud className="w-4 h-4 text-[#248A3D]" />
+                  <span className="text-xs text-[#1D1D1F] font-semibold truncate max-w-[180px]">
+                    {user.email}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="text-xs font-semibold text-[#FF3B30] hover:underline"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setIsAuthModalOpen(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-[#0071E3] text-white"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In or Save History</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Embedded Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialView="auth"
+      />
     </header>
   );
 };

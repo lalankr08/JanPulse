@@ -111,6 +111,35 @@ export async function extractImageText(file: File): Promise<{ text: string; file
   return await res.json();
 }
 
+export async function extractDocumentText(file: File): Promise<{
+  status: string;
+  filename: string;
+  doc_type: string;
+  pages: number;
+  word_count: number;
+  text: string;
+  preview?: string;
+  message?: string;
+}> {
+  const token = await getOrCreateSessionToken();
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${API_BASE}/v1/documents/extract`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`
+    },
+    body: formData
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Document extraction failed: ${errText}`);
+  }
+  return await res.json();
+}
+
 export async function fetchEnglishSpeech(text: string): Promise<Blob> {
   const token = await getOrCreateSessionToken();
   const formData = new FormData();
@@ -163,6 +192,34 @@ export async function deleteUserHistory(): Promise<{ status: string; message: st
   });
   if (!res.ok) {
     throw new Error(`Failed to delete history: ${await res.text()}`);
+  }
+  return await res.json();
+}
+
+
+export async function syncHistoryToCloud(items: any[]): Promise<{ status: string; synced_ids: string[]; synced_count: number }> {
+  const token = await getOrCreateSessionToken();
+  const res = await fetch(`${API_BASE}/v1/me/sync-history`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    body: JSON.stringify({ items })
+  });
+  if (!res.ok) {
+    throw new Error(`Sync failed: ${await res.text()}`);
+  }
+  return await res.json();
+}
+
+export async function fetchUserHistory(): Promise<{ history: any[]; is_guest: boolean; count?: number }> {
+  const token = await getOrCreateSessionToken();
+  const res = await fetch(`${API_BASE}/v1/me/history`, {
+    headers: { "Authorization": `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    throw new Error(`Could not fetch history: ${await res.text()}`);
   }
   return await res.json();
 }

@@ -1,16 +1,22 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { VerdictChip } from '@/components/VerdictChip';
 import { CitationCard } from '@/components/CitationCard';
 import { EvidenceTrail, TraceStep } from '@/components/EvidenceTrail';
 import { AudioPlayer } from '@/components/AudioPlayer';
-import { createRunStream, transcribeAudioBlob, extractImageText } from '@/lib/api';
+import { createRunStream, transcribeAudioBlob, extractImageText, syncHistoryToCloud } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
+import { 
+  getLocalHistory, addLocalHistoryItem, getAuthPreference, 
+  getUnsyncedItems, markItemsAsSynced, clearLocalHistory, LocalHistoryItem 
+} from '@/lib/historyStore';
+import { AuthModal } from '@/components/AuthModal';
 import { 
   FileText, Upload, Mic, ArrowRight, RefreshCw, Share2, 
   AlertCircle, Check, Loader2, Sparkles, Building2, X, Image as ImageIcon,
-  CheckCircle2, ShieldCheck, ArrowUpRight
+  CheckCircle2, ShieldCheck, ArrowUpRight, History, Trash2, Lock, Cloud
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -18,6 +24,11 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<'paste' | 'upload' | 'speak'>('paste');
   const [inputText, setInputText] = useState('');
   
+  // Auth & Guest state
+  const [user, setUser] = useState<any>(null);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
+  const [recentHistory, setRecentHistory] = useState<LocalHistoryItem[]>([]);
+
   // Image / screenshot state
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
@@ -40,6 +51,53 @@ export default function HomePage() {
   const [sources, setSources] = useState<any[]>([]);
   const [nudgeMessage, setNudgeMessage] = useState<string | null>(null);
   const [copiedShare, setCopiedShare] = useState(false);
+
+  // Initial load: check auth preference & load local history
+  useEffect(() => {
+    setRecentHistory(getLocalHistory());
+
+    const pref = getAuthPreference();
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      setUser(user);
+      if (!user && !pref) {
+        // Prompt user on entry: sign in to save history or continue as guest
+        setShowAuthPrompt(true);
+      } else if (user) {
+        // Authenticated: sync any unsynced local guest items
+        const unsynced = getUnsyncedItems();
+        if (unsynced.length > 0) {
+          try {
+            const res = await syncHistoryToCloud(unsynced);
+            markItemsAsSynced(res.synced_ids);
+            setRecentHistory(getLocalHistory());
+          } catch (e) {
+            console.warn('Sync on mount error:', e);
+          }
+        }
+      }
+    });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const activeUser = session?.user ?? null;
+      setUser(activeUser);
+      if (activeUser) {
+        const unsynced = getUnsyncedItems();
+        if (unsynced.length > 0) {
+          try {
+            const res = await syncHistoryToCloud(unsynced);
+            markItemsAsSynced(res.synced_ids);
+            setRecentHistory(getLocalHistory());
+          } catch (e) {
+            console.warn('Sync on auth change error:', e);
+          }
+        }
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   // Image upload and OCR handlers
   const handleImageSelect = async (file: File) => {
@@ -179,10 +237,32 @@ export default function HomePage() {
             setSources(event.sources || []);
             setIsRunning(false);
             setCurrentStepMessage('');
+
+            // Save to local device history
+            const firstV = event.verdicts?.[0];
+            const isSynced = Boolean(event.saved_to_cloud);
+            addLocalHistoryItem({
+              query: inputText,
+              kind: 'forward',
+              label: firstV?.label,
+              explanation: firstV?.explanation,
+              confidence: firstV?.confidence,
+              confidence_reason: firstV?.confidence_reason
+            }, isSynced);
+            setRecentHistory(getLocalHistory());
+
           } else if (event.status === 'nudge') {
             setNudgeMessage(event.nudge_message);
             setIsRunning(false);
             setCurrentStepMessage('');
+
+            addLocalHistoryItem({
+              query: inputText,
+              kind: 'forward',
+              label: 'Nudge / Unverifiable',
+              explanation: event.nudge_message
+            }, false);
+            setRecentHistory(getLocalHistory());
           }
         },
         (err) => {
@@ -210,7 +290,7 @@ export default function HomePage() {
       <Navbar language={language} setLanguage={setLanguage} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-        {/* Apple-style Hero */}
+        {/* Hero */}
         <div className="text-center max-w-2xl mx-auto mb-10 sm:mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0071E3]/10 text-[#0071E3] text-xs font-semibold mb-4 tracking-tight">
             <Sparkles className="w-3.5 h-3.5" />
@@ -224,8 +304,8 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Apple Bento Input Card */}
-        <div className="bg-white rounded-3xl border border-black/[0.06] p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] mb-10 transition-all">
+        {/* Bento Input Card */}
+        <div className="bg-white rounded-3xl border border-black/[0.06] p-6 sm:p-8 shadow-[0_4px_24px_rgba(0,0,0,0.04)] mb-8 transition-all">
           {/* iOS Segmented Pill Controls */}
           <div className="flex items-center justify-center sm:justify-start mb-6">
             <div className="bg-[#E5E5EA]/70 p-1 rounded-full flex gap-1 text-xs font-semibold border border-black/[0.04]">
@@ -417,6 +497,78 @@ export default function HomePage() {
               )}
             </button>
           </div>
+
+          {/* Recent checks on this device */}
+          {recentHistory.length > 0 && (
+            <div className="mt-6 pt-5 border-t border-black/[0.06]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#1D1D1F]">
+                  <History className="w-3.5 h-3.5 text-[#0071E3]" />
+                  <span>Recent on this device</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/[0.04] text-[#86868B] font-medium flex items-center gap-1">
+                    {user ? (
+                      <>
+                        <Cloud className="w-3 h-3 text-[#248A3D]" />
+                        <span>Cloud Synced</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3 h-3 text-[#86868B]" />
+                        <span>Device Only</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearLocalHistory();
+                    setRecentHistory([]);
+                  }}
+                  className="text-[11px] text-[#86868B] hover:text-[#FF3B30] flex items-center gap-1 transition-colors"
+                  title="Clear recent searches from this device"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {recentHistory.slice(0, 5).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setInputText(item.query);
+                      if (item.label && item.explanation) {
+                        setVerdicts([{
+                          label: item.label,
+                          explanation: item.explanation,
+                          confidence: item.confidence || 0.9,
+                          confidence_reason: item.confidence_reason || 'Cached from local device check',
+                          citations: []
+                        }]);
+                      }
+                    }}
+                    className="group flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#F5F5F7] hover:bg-black/[0.06] border border-black/[0.04] text-xs transition-all text-left max-w-full sm:max-w-xs truncate"
+                  >
+                    <span className="truncate text-[#1D1D1F] font-medium group-hover:text-[#0071E3]">
+                      {item.query}
+                    </span>
+                    {item.label && (
+                      <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                        item.label === 'true' ? 'bg-[#34C759]/15 text-[#248A3D]' :
+                        item.label === 'contradicted' ? 'bg-[#FF3B30]/15 text-[#D70015]' :
+                        'bg-[#FF9500]/15 text-[#B25000]'
+                      }`}>
+                        {item.label}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Live Running Status */}
@@ -445,7 +597,7 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Results Bento Section */}
+        {/* Results Section */}
         {verdicts.length > 0 && (
           <div className="space-y-8 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-black/[0.06] pb-4">
@@ -567,6 +719,13 @@ export default function HomePage() {
           </div>
         )}
       </main>
+
+      {/* Entry Auth Prompt Modal */}
+      <AuthModal
+        isOpen={showAuthPrompt}
+        onClose={() => setShowAuthPrompt(false)}
+        initialView="prompt"
+      />
     </div>
   );
 }

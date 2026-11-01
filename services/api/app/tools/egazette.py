@@ -33,13 +33,17 @@ def extract_text_from_html(html_bytes_or_str: bytes | str) -> str:
         clean = re.sub(r"<[^>]+>", " ", content_str)
         return re.sub(r"\s+", " ", clean).strip()
 
-def extract_text_from_pdf_bytes(pdf_bytes: bytes, max_pages: int = 15) -> tuple[str, int]:
-    """Safely extracts text from PDF bytes without crashing on corrupted headers or stream errors."""
+def extract_text_from_pdf_bytes(pdf_bytes: bytes, max_pages: int = 25) -> tuple[str, int]:
+    """
+    Safely extracts selectable text from PDF bytes using pypdf.
+    If the PDF is a scanned image (minimal selectable text), falls back to Gemini Vision OCR.
+    """
+    num_pages = 1
+    extracted_text = []
     try:
         reader = PdfReader(io.BytesIO(pdf_bytes), strict=False)
         num_pages = len(reader.pages)
         pages_to_read = min(num_pages, max_pages)
-        extracted_text = []
         for i in range(pages_to_read):
             try:
                 page_text = reader.pages[i].extract_text() or ""
@@ -47,22 +51,110 @@ def extract_text_from_pdf_bytes(pdf_bytes: bytes, max_pages: int = 15) -> tuple[
                     extracted_text.append(f"--- Page {i + 1} ---\n{page_text.strip()}")
             except Exception as page_err:
                 extracted_text.append(f"--- Page {i + 1} (text extraction skipped: {page_err}) ---")
-
-        full_content = "\n\n".join(extracted_text)
-        return full_content if full_content.strip() else "PDF contains no selectable text (scanned image).", num_pages
     except Exception as pdf_err:
-        # Fallback: extract plain ascii/utf-8 strings from bytes
-        try:
-            strings = re.findall(rb"[\x20-\x7E\r\n]{6,}", pdf_bytes)
-            decoded = [s.decode("latin-1", errors="ignore").strip() for s in strings if s.strip()]
-            filtered = [s for s in decoded if len(s) > 10 and not s.startswith(("/Filter", "/Type", "/Font", "obj", "endobj"))]
-            if filtered:
-                return "\n".join(filtered[:100]), 1
-        except Exception:
-            pass
-        return f"Document text could not be parsed as PDF: {pdf_err}", 1
+        print(f"[eGazette] pypdf parsing error: {pdf_err}")
 
-def fetch_and_parse_pdf(url_or_path: str, max_pages: int = 15) -> dict:
+    full_content = "\n\n".join(extracted_text)
+
+    # If PDF yielded meaningful selectable text (>= 60 characters), return it
+    if len(full_content.strip()) >= 60:
+        return full_content, num_pages
+
+    # Fallback 1: Attempt Gemini Multimodal Vision OCR for scanned PDF
+    try:
+        from app.llm.router import router
+        ocr_text = router.extract_image_text(pdf_bytes, mime_type="application/pdf")
+        if ocr_text and len(ocr_text.strip()) >= 40:
+            return f"--- Scanned Document (OCR Verified) ---\n{ocr_text.strip()}", num_pages
+    except Exception as ocr_err:
+        print(f"[eGazette] PDF OCR fallback note: {ocr_err}")
+
+    # Fallback 2: regex extract ascii strings from binary stream
+    try:
+        strings = re.findall(rb"[\x20-\x7E\r\n]{6,}", pdf_bytes)
+        decoded = [s.decode("latin-1", errors="ignore").strip() for s in strings if s.strip()]
+        filtered = [s for s in decoded if len(s) > 10 and not s.startswith(("/Filter", "/Type", "/Font", "obj", "endobj"))]
+        if filtered:
+            return "\n".join(filtered[:120]), num_pages
+    except Exception:
+        pass
+
+    return "Document contains scanned imagery without selectable text.", num_pages
+
+def extract_text_from_docx_bytes(docx_bytes: bytes) -> tuple[str, int]:
+    """Extracts clean text and tabular sections from Microsoft Word (.docx) files using python-docx."""
+    try:
+        import docx
+        doc = docx.Document(io.BytesIO(docx_bytes))
+        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        
+        tables_text = []
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                if cells:
+                    tables_text.append(" | ".join(cells))
+                    
+        full_content = "\n\n".join(paragraphs + tables_text)
+        approx_pages = max(1, len(full_content) // 2500)
+        return full_content if full_content.strip() else "Document contains no text.", approx_pages
+    except Exception as docx_err:
+        print(f"[eGazette] docx parsing note: {docx_err}")
+        return extract_text_from_doc_bytes(docx_bytes)
+
+def extract_text_from_doc_bytes(doc_bytes: bytes) -> tuple[str, int]:
+    """Extracts printable text runs from legacy binary Word (.doc) files."""
+    try:
+        # Match printable ASCII / Latin runs
+        strings = re.findall(rb"[\x20-\x7E\r\n]{5,}", doc_bytes)
+        decoded = [s.decode("latin-1", errors="ignore").strip() for s in strings if s.strip()]
+        filtered = [
+            s for s in decoded 
+            if len(s) > 8 and not s.startswith(("\\", "Normal", "Default Font", "Times New Roman", "Courier"))
+        ]
+        text = "\n".join(filtered)
+        approx_pages = max(1, len(text) // 2500)
+        return text if text.strip() else "Legacy document could not be decoded.", approx_pages
+    except Exception as doc_err:
+        return f"Could not parse document: {doc_err}", 1
+
+def extract_document_text(file_bytes: bytes, filename: str = "") -> tuple[str, int, str]:
+    """
+    Unified extractor for government gazettes, circulars, and official orders.
+    Supports PDF (.pdf), Microsoft Word (.docx, .doc), plain text (.txt), and HTML.
+    Returns (content_text, page_count, doc_type).
+    """
+    fn_lower = filename.lower()
+    
+    # 1. PDF
+    if b"%PDF-" in file_bytes[:1024] or fn_lower.endswith(".pdf"):
+        text, pages = extract_text_from_pdf_bytes(file_bytes)
+        return text, pages, "pdf"
+
+    # 2. DOCX (OpenXML zip format starts with PK\x03\x04)
+    if file_bytes[:4] == b"PK\x03\x04" or fn_lower.endswith(".docx"):
+        text, pages = extract_text_from_docx_bytes(file_bytes)
+        return text, pages, "docx"
+
+    # 3. Legacy DOC (.doc)
+    if fn_lower.endswith(".doc") or b"\xd0\xcf\x11\xe0" in file_bytes[:8]:
+        text, pages = extract_text_from_docx_bytes(file_bytes)
+        return text, pages, "doc"
+
+    # 4. Text / HTML / Markdown
+    try:
+        content_str = file_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        content_str = file_bytes.decode("latin-1", errors="ignore")
+
+    if "<html" in content_str.lower() or "<body" in content_str.lower():
+        text = extract_text_from_html(content_str)
+        return text, 1, "html"
+
+    clean_text = content_str.strip()
+    return clean_text, max(1, len(clean_text) // 2500), "text"
+
+def fetch_and_parse_pdf(url_or_path: str, max_pages: int = 25) -> dict:
     url_or_path = (url_or_path or "").strip()
     if not url_or_path:
         return {
@@ -83,7 +175,6 @@ def fetch_and_parse_pdf(url_or_path: str, max_pages: int = 15) -> dict:
             raise ValueError(f"Security check failed: {reason}")
 
         try:
-            # Using verify=False to prevent SSL handshake aborts on Indian NIC / egazette servers
             with httpx.Client(headers=CHROME_HEADERS, follow_redirects=True, timeout=25.0, verify=False) as client:
                 resp = client.get(url_or_path)
                 if resp.status_code != 200:
@@ -93,7 +184,6 @@ def fetch_and_parse_pdf(url_or_path: str, max_pages: int = 15) -> dict:
         except Exception as net_err:
             raise RuntimeError(f"Unable to connect to {url_or_path}: {net_err}")
 
-        # Check if downloaded content is actually a PDF (checking magic bytes %PDF-)
         is_pdf = (
             b"%PDF-" in content_bytes[:1024]
             or "application/pdf" in content_type
@@ -114,7 +204,6 @@ def fetch_and_parse_pdf(url_or_path: str, max_pages: int = 15) -> dict:
                 "http_status": 200
             }
         else:
-            # Downloaded content is HTML or plain text (e.g. landing page or web circular)
             html_text = extract_text_from_html(content_bytes)
             return {
                 "title": "Government Gazette / Official Web Notification",
@@ -140,38 +229,22 @@ def fetch_and_parse_pdf(url_or_path: str, max_pages: int = 15) -> dict:
             with open(url_or_path, "rb") as f:
                 file_bytes = f.read()
 
-            if b"%PDF-" in file_bytes[:1024] or url_or_path.lower().endswith(".pdf"):
-                full_content, num_pages = extract_text_from_pdf_bytes(file_bytes, max_pages=max_pages)
-                pages_processed = min(num_pages, max_pages)
-                return {
-                    "title": f"Local Document / Gazette ({os.path.basename(url_or_path)})",
-                    "url": url_or_path,
-                    "publisher": "The Gazette of India (e-Gazette)",
-                    "source_type": "egazette",
-                    "total_pages": num_pages,
-                    "pages_processed": pages_processed,
-                    "content": full_content,
-                    "http_status": 200
-                }
-            else:
-                try:
-                    text_content = file_bytes.decode("utf-8", errors="replace")
-                except Exception:
-                    text_content = str(file_bytes)
-                return {
-                    "title": f"Document ({os.path.basename(url_or_path)})",
-                    "url": url_or_path,
-                    "publisher": "Official Circular Document",
-                    "source_type": "file",
-                    "total_pages": 1,
-                    "pages_processed": 1,
-                    "content": text_content,
-                    "http_status": 200
-                }
+            text, num_pages, doc_type = extract_document_text(file_bytes, filename=os.path.basename(url_or_path))
+            pages_processed = min(num_pages, max_pages)
+            return {
+                "title": f"Official Document ({os.path.basename(url_or_path)})",
+                "url": url_or_path,
+                "publisher": "The Gazette of India (e-Gazette)",
+                "source_type": doc_type,
+                "total_pages": num_pages,
+                "pages_processed": pages_processed,
+                "content": text,
+                "http_status": 200
+            }
         except Exception as file_err:
             print(f"[eGazette] Failed reading file {url_or_path}: {file_err}")
 
-    # Case 3: Raw Text or Query (user pasted notification text directly or planner tool passed a query)
+    # Case 3: Raw Text or Query (user pasted notification text directly)
     return {
         "title": "Government Gazette / Circular Text",
         "url": "input:user_text",

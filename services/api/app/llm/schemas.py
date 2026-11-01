@@ -8,13 +8,14 @@ class AtomicClaim(BaseModel):
     kind: Literal["scheme", "amount", "deadline", "law", "eligibility", "rumor_or_hoax", "other"] = Field(description="Type of claim")
 
 class FactCheckAssessment(BaseModel):
-    is_hoax_or_viral_rumor: bool = Field(description="True if the claim is an unsubstantiated viral rumor, fabricated personal/celebrity gossip, satire, phishing scam, or known internet hoax.")
+    is_hoax_or_viral_rumor: bool = Field(description="Set to True ONLY if the claim is an unsubstantiated viral rumor, fabricated personal/celebrity gossip, satire, or phishing scam. False for genuine schemes.")
     hoax_category: Optional[Literal["celebrity_political_gossip", "fabricated_scheme_scam", "satirical_meme", "conspiracy_hoax", "genuine_civic_query"]] = Field(default="genuine_civic_query")
-    verdict_label: Literal["contradicted", "cannot_verify", "proceed_official_check"] = Field(description="If clearly a known hoax or fabricated rumor, mark contradicted. If civic policy query, mark proceed_official_check.")
+    verdict_label: Literal["contradicted", "cannot_verify", "proceed_official_check"] = Field(description="Mark proceed_official_check for genuine civic queries or real government schemes. Mark contradicted ONLY for debunked hoaxes, scams, or gossip.")
     confidence: float = Field(default=0.95, ge=0.0, le=1.0)
     confidence_reason: str = Field(description="Explanation of why this is considered a rumor/hoax or needs official checking.")
-    explanation: str = Field(description="Clear citizen explanation explaining whether it is true, fake rumor, or internet meme.")
-    fact_check_basis: str = Field(description="Source basis or public record consensus.")
+    correct_official_fact: str = Field(default="", description="The actual, true government policy or public record fact explaining the real situation.")
+    explanation: str = Field(description="Citizen-friendly explanation: state plainly that the claim is false/rumor, and explain what the real fact is.")
+    fact_check_basis: str = Field(default="PIB Fact Check & Official Public Records", description="Source basis or public record consensus.")
 
 class ClaimExtractionResult(BaseModel):
     has_checkable_claims: bool = Field(description="Whether the input contains actual checkable civic/government claims or viral rumors")

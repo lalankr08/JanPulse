@@ -1,5 +1,6 @@
 import json
 import time
+import uuid
 from typing import AsyncGenerator
 from app.graph.state import PipelineState
 from app.db import Database
@@ -30,7 +31,7 @@ class JanPulsePipeline:
         
         # Check prompt injection screen
         injected, reason = screen_prompt_injection(state.raw_input)
-        if injected:
+        if injected and state.persist_to_db:
             Database.insert_trace_event(
                 run_id=state.run_id, seq=state.seq, node="ingest",
                 event_type="security_alert", detail={"reason": reason}
@@ -50,12 +51,26 @@ class JanPulsePipeline:
             hoax_prompt = f"""Evaluate this citizen forward or social media message:
 "{clean_input}"
 
-Determine if this is an unsubstantiated viral rumor, celebrity/political personal gossip, internet meme, or fabricated hoax versus an official government policy inquiry.
+CRITICAL RULES:
+1. If this message asks about or mentions any genuine government scheme (e.g. PM-KISAN, PM Surya Ghar, Ayushman Bharat, Mudra, PMAY, pension, subsidy, farmer benefits), tax rules, or official acts:
+   -> You MUST set `is_hoax_or_viral_rumor: false` and `verdict_label: "proceed_official_check"` and `hoax_category: "genuine_civic_query"`.
+   Do NOT judge scheme eligibility or details here; let the official retrieval pipeline verify it with live government sources!
+
+2. ONLY mark `is_hoax_or_viral_rumor: true` and `verdict_label: "contradicted"` if this message is:
+   - Personal celebrity or political gossip / relationship rumors (e.g. dating, marriage).
+   - Known satirical memes or fabricated internet hoaxes (e.g. '500 rupee notes banned next month', 'UNESCO declared national anthem best').
+   - Fraudulent phishing scams (e.g. 'Government giving 5000 free cash if you click this link').
+
+3. Whenever you debunk a rumor as contradicted:
+   - Your `explanation` MUST plainly state that the claim is false AND clearly state what the accurate real fact is from official public records.
 """
             try:
                 hoax_eval, h_model = router.complete_structured(
                     prompt=hoax_prompt,
-                    system_prompt="You are an expert fact-checker specialized in Indian current affairs, social media hoaxes, and political memes.",
+                    system_prompt=(
+                        "You are an expert fact-checker specialized in Indian current affairs, social media hoaxes, and political memes. "
+                        "When debunking a rumor, always explain what the true, correct official policy is."
+                    ),
                     response_model=FactCheckAssessment,
                     preferred_model_tier="fast"
                 )
@@ -70,58 +85,66 @@ Determine if this is an unsubstantiated viral rumor, celebrity/political persona
                     fact_check_basis=""
                 )
 
-            # If identified as an unsubstantiated viral rumor / celebrity gossip / hoax
-            if hoax_eval.is_hoax_or_viral_rumor and hoax_eval.verdict_label == "contradicted":
-                Database.insert_trace_event(
-                    run_id=state.run_id, seq=state.seq, node="extract_claims",
-                    event_type="hoax_detected", model="fact_check_evaluator",
-                    detail={"category": hoax_eval.hoax_category, "reason": hoax_eval.confidence_reason}
-                )
+            # If identified as an unsubstantiated viral rumor / celebrity gossip / hoax (and NOT a genuine civic query)
+            if hoax_eval.is_hoax_or_viral_rumor and hoax_eval.verdict_label == "contradicted" and hoax_eval.hoax_category != "genuine_civic_query":
+                if state.persist_to_db:
+                    Database.insert_trace_event(
+                        run_id=state.run_id, seq=state.seq, node="extract_claims",
+                        event_type="hoax_detected", model="fact_check_evaluator",
+                        detail={"category": hoax_eval.hoax_category, "reason": hoax_eval.confidence_reason}
+                    )
                 state.seq += 1
 
-                # Save fake/debunked verdict to DB
-                claim_row = Database.execute_one(
-                    """INSERT INTO claims (run_id, claim_text, claim_text_en, kind)
-                       VALUES (%s, %s, %s, 'rumor_or_hoax') RETURNING id""",
-                    (state.run_id, state.raw_input, state.raw_input)
-                )
-                claim_id = claim_row["id"] if claim_row else None
+                verdict_id = f"v_guest_{uuid.uuid4().hex[:8]}"
+                share_id = f"s_guest_{uuid.uuid4().hex[:8]}"
 
-                v_row = Database.execute_one(
-                    """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
-                       VALUES (%s, %s, 'contradicted', %s, %s, %s, %s)
-                       RETURNING id, share_id""",
-                    (claim_id, state.run_id, hoax_eval.confidence,
-                     f"Fact-Check: {hoax_eval.confidence_reason or 'Recognized as unsubstantiated viral rumor / meme'}",
-                     hoax_eval.explanation, state.target_language)
-                )
-                verdict_id = str(v_row["id"]) if v_row else "v_hoax"
-                share_id = v_row["share_id"] if v_row else "share_hoax"
-
-                # Save public fact-check citation
-                fake_source = Database.save_source(
-                    url="https://factcheck.pib.gov.in",
-                    publisher="PIB Fact Check & Public Record Consensus",
-                    source_type="other",
-                    title="Fact-Check Analysis of Viral Social Media Claims",
-                    http_status=200,
-                    raw_text=hoax_eval.explanation
-                )
-                if fake_source:
-                    Database.execute_query(
-                        """INSERT INTO citations (verdict_id, source_id, role, span, fetched_at)
-                           VALUES (%s, %s, 'contradicts', %s, NOW())""",
-                        (verdict_id, str(fake_source["id"]), hoax_eval.explanation[:200])
+                if state.persist_to_db:
+                    # Save fake/debunked verdict to DB
+                    claim_row = Database.execute_one(
+                        """INSERT INTO claims (run_id, claim_text, claim_text_en, kind)
+                           VALUES (%s, %s, %s, 'rumor_or_hoax') RETURNING id""",
+                        (state.run_id, state.raw_input, state.raw_input)
                     )
+                    claim_id = claim_row["id"] if claim_row else None
 
-                Database.execute_query(
-                    "UPDATE agent_runs SET status = 'completed', finished_at = NOW() WHERE id = %s",
-                    (state.run_id,)
-                )
+                    v_row = Database.execute_one(
+                        """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
+                           VALUES (%s, %s, 'contradicted', %s, %s, %s, %s)
+                           RETURNING id, share_id""",
+                        (claim_id, state.run_id, hoax_eval.confidence,
+                         f"Fact-Check: {hoax_eval.confidence_reason or 'Recognized as unsubstantiated viral rumor / meme'}",
+                         hoax_eval.explanation, state.target_language)
+                    )
+                    verdict_id = str(v_row["id"]) if v_row else verdict_id
+                    share_id = v_row["share_id"] if v_row else share_id
+
+                    fake_source = Database.save_source(
+                        url="https://factcheck.pib.gov.in",
+                        publisher="PIB Fact Check & Public Record Consensus",
+                        source_type="other",
+                        title="Fact-Check Analysis of Viral Social Media Claims",
+                        http_status=200,
+                        raw_text=hoax_eval.explanation
+                    )
+                    if fake_source:
+                        Database.execute_query(
+                            """INSERT INTO citations (verdict_id, source_id, role, span, fetched_at)
+                               VALUES (%s, %s, 'contradicts', %s, NOW())""",
+                            (verdict_id, str(fake_source["id"]), hoax_eval.explanation[:200])
+                        )
+
+                    Database.execute_query(
+                        "UPDATE agent_runs SET status = 'completed', finished_at = NOW() WHERE id = %s",
+                        (state.run_id,)
+                    )
 
                 yield {
                     "type": "final_verdict",
-                    "run_id": state.run_id,
+            "run_id": state.run_id,
+            "is_guest": not state.persist_to_db,
+            "saved_to_cloud": state.persist_to_db,
+                    "is_guest": not state.persist_to_db,
+                    "saved_to_cloud": state.persist_to_db,
                     "verdicts": [
                         {
                             "id": verdict_id,
@@ -129,13 +152,13 @@ Determine if this is an unsubstantiated viral rumor, celebrity/political persona
                             "claim_id": "claim_1",
                             "label": "contradicted",
                             "confidence": float(hoax_eval.confidence),
-                            "confidence_reason": "Fact-Check: Unsubstantiated internet rumor / social media meme with zero basis in official record.",
+                            "confidence_reason": hoax_eval.confidence_reason or "Fact-Check: Unsubstantiated internet rumor / meme with zero basis in official record.",
                             "explanation": hoax_eval.explanation,
                             "citations": [
                                 {
                                     "url": "https://factcheck.pib.gov.in",
                                     "role": "contradicts",
-                                    "span": hoax_eval.explanation[:150],
+                                    "span": hoax_eval.correct_official_fact or hoax_eval.explanation[:150],
                                     "publisher": "PIB Fact Check Unit"
                                 }
                             ]
@@ -166,18 +189,19 @@ Determine if this is an unsubstantiated viral rumor, celebrity/political persona
             state.claims = extraction.claims
             state.nudge_message = extraction.nudge_message
 
-            # Save claims to DB
-            for c in state.claims:
-                Database.execute_query(
-                    "INSERT INTO claims (run_id, claim_text, claim_text_en, kind) VALUES (%s, %s, %s, %s)",
-                    (state.run_id, c.claim_text, c.claim_text_en, c.kind)
-                )
+            # Save claims to DB only if authenticated
+            if state.persist_to_db:
+                for c in state.claims:
+                    Database.execute_query(
+                        "INSERT INTO claims (run_id, claim_text, claim_text_en, kind) VALUES (%s, %s, %s, %s)",
+                        (state.run_id, c.claim_text, c.claim_text_en, c.kind)
+                    )
 
-            Database.insert_trace_event(
-                run_id=state.run_id, seq=state.seq, node="extract_claims",
-                event_type="claims_extracted", model=model_used,
-                detail={"claims_count": len(state.claims), "has_claims": extraction.has_checkable_claims}
-            )
+                Database.insert_trace_event(
+                    run_id=state.run_id, seq=state.seq, node="extract_claims",
+                    event_type="claims_extracted", model=model_used,
+                    detail={"claims_count": len(state.claims), "has_claims": extraction.has_checkable_claims}
+                )
             state.seq += 1
 
             if not state.has_checkable_claims or not state.claims:
@@ -345,8 +369,9 @@ Determine if this is an unsubstantiated viral rumor, celebrity/political persona
             )
             state.models_used["plan"] = model_used
 
-            Database.insert_trace_event(
-                run_id=state.run_id, seq=state.seq, node="plan",
+            if state.persist_to_db:
+                Database.insert_trace_event(
+                    run_id=state.run_id, seq=state.seq, node="plan",
                 event_type="plan_created", model=model_used,
                 detail={"tools": [t.tool for t in plan_res.tool_calls], "strategy": plan_res.strategy}
             )
@@ -443,8 +468,9 @@ Official Evidence Chunks:
             )
             state.verdicts = verified_verdicts
 
-            Database.insert_trace_event(
-                run_id=state.run_id, seq=state.seq, node="verify_citations",
+            if state.persist_to_db:
+                Database.insert_trace_event(
+                    run_id=state.run_id, seq=state.seq, node="verify_citations",
                 event_type="verification_completed",
                 detail={"all_passed": all_passed, "failures_count": len(failures)}
             )
@@ -461,58 +487,70 @@ Official Evidence Chunks:
         
         final_verdicts_data = []
         for v in state.verdicts:
-            claim_row = Database.execute_one(
-                "SELECT id FROM claims WHERE run_id = %s LIMIT 1",
-                (state.run_id,)
-            )
-            claim_id = claim_row["id"] if claim_row else None
+            verdict_id = f"v_guest_{uuid.uuid4().hex[:8]}"
+            share_id = f"s_guest_{uuid.uuid4().hex[:8]}"
             
-            if claim_id:
-                v_row = Database.execute_one(
-                    """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
-                       VALUES (%s, %s, %s, %s, %s, %s, %s)
-                       RETURNING id, share_id""",
-                    (claim_id, state.run_id, v.label, v.confidence, v.confidence_reason, v.explanation, state.target_language)
+            if state.persist_to_db:
+                claim_row = Database.execute_one(
+                    "SELECT id FROM claims WHERE run_id = %s LIMIT 1",
+                    (state.run_id,)
                 )
-                verdict_id = str(v_row["id"])
-                share_id = v_row["share_id"]
+                claim_id = claim_row["id"] if claim_row else None
                 
-                citations_data = []
-                for cit in v.citations:
-                    chunk = state.chunks_by_id.get(cit.chunk_id)
-                    source_id = chunk.get("source_id") if chunk else None
-                    if source_id:
-                        Database.execute_query(
-                            """INSERT INTO citations (verdict_id, source_id, chunk_id, role, span, fetched_at)
-                               VALUES (%s, %s, %s, %s, %s, NOW())""",
-                            (verdict_id, source_id, cit.chunk_id, cit.role, cit.verbatim_span)
-                        )
-                    citations_data.append({
-                        "url": cit.source_url,
-                        "role": cit.role,
-                        "span": cit.verbatim_span,
-                        "publisher": chunk.get("publisher", "Official Portal") if chunk else "Official Portal"
-                    })
+                if claim_id:
+                    v_row = Database.execute_one(
+                        """INSERT INTO verdicts (claim_id, run_id, label, confidence, confidence_reason, explanation, explanation_lang)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s)
+                           RETURNING id, share_id""",
+                        (claim_id, state.run_id, v.label, v.confidence, v.confidence_reason, v.explanation, state.target_language)
+                    )
+                    if v_row:
+                        verdict_id = str(v_row["id"])
+                        share_id = v_row["share_id"]
+                    
+                    for cit in v.citations:
+                        chunk = state.chunks_by_id.get(cit.chunk_id)
+                        source_id = chunk.get("source_id") if chunk else None
+                        if source_id:
+                            Database.execute_query(
+                                """INSERT INTO citations (verdict_id, source_id, chunk_id, role, span, fetched_at)
+                                   VALUES (%s, %s, %s, %s, %s, NOW())""",
+                                (verdict_id, source_id, cit.chunk_id, cit.role, cit.verbatim_span)
+                            )
 
-                final_verdicts_data.append({
-                    "id": verdict_id,
-                    "share_id": share_id,
-                    "claim_id": v.claim_id,
-                    "label": v.label,
-                    "confidence": float(v.confidence),
-                    "confidence_reason": v.confidence_reason,
-                    "explanation": v.explanation,
-                    "citations": citations_data
+            citations_data = []
+            for cit in v.citations:
+                chunk = state.chunks_by_id.get(cit.chunk_id)
+                citations_data.append({
+                    "url": cit.source_url,
+                    "role": cit.role,
+                    "span": cit.verbatim_span,
+                    "publisher": chunk.get("publisher", "Official Portal") if chunk else "Official Portal"
                 })
 
-        Database.execute_query(
-            "UPDATE agent_runs SET status = 'completed', finished_at = NOW() WHERE id = %s",
-            (state.run_id,)
-        )
+            final_verdicts_data.append({
+                "id": verdict_id,
+                "share_id": share_id,
+                "claim_id": v.claim_id,
+                "label": v.label,
+                "confidence": float(v.confidence),
+                "confidence_reason": v.confidence_reason,
+                "explanation": v.explanation,
+                "citations": citations_data
+            })
+
+        if state.persist_to_db:
+            Database.execute_query(
+                "UPDATE agent_runs SET status = 'completed', finished_at = NOW() WHERE id = %s",
+                (state.run_id,)
+            )
+
 
         yield {
             "type": "final_verdict",
             "run_id": state.run_id,
+            "is_guest": not state.persist_to_db,
+            "saved_to_cloud": state.persist_to_db,
             "verdicts": final_verdicts_data,
             "evidence_count": len(state.retrieved_sources),
             "sources": [{"title": s.get("title"), "url": s.get("url"), "publisher": s.get("publisher")} for s in state.retrieved_sources]

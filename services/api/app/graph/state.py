@@ -38,4 +38,5 @@ class PipelineState:
     audio_available: bool = False
     models_used: dict[str, str] = field(default_factory=dict)
     status: str = "running"
+    persist_to_db: bool = True
 
