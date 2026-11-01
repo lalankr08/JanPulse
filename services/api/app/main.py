@@ -86,9 +86,15 @@ async def create_run(
                 event_name = event.get("type", "update")
                 yield f"event: {event_name}\ndata: {json.dumps(event)}\n\n"
         except Exception as e:
+            print(f"[Main API] Run {run_id} execution error: {e}", flush=True)
+            import traceback
+            traceback.print_exc()
             err_data = {"type": "error", "message": str(e)}
             yield f"event: error\ndata: {json.dumps(err_data)}\n\n"
-            Database.execute_query("UPDATE agent_runs SET status = 'failed' WHERE id = %s", (run_id,))
+            try:
+                Database.execute_query("UPDATE agent_runs SET status = 'failed' WHERE id = %s", (run_id,))
+            except Exception as db_err:
+                print(f"[Main API] Failed to mark run {run_id} failed: {db_err}", flush=True)
 
     return StreamingResponse(
         event_generator(),

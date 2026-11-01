@@ -57,7 +57,11 @@ export async function createRunStream(
         const rawJson = chunk.slice(dataIndex + 5).trim();
         try {
           const parsed = JSON.parse(rawJson);
-          onEvent(parsed);
+          if (parsed.type === "error") {
+            onError(new Error(parsed.message || "Pipeline execution failed"));
+          } else {
+            onEvent(parsed);
+          }
         } catch (e) {
           console.warn("Could not parse SSE JSON:", rawJson);
         }

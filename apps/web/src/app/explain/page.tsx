@@ -36,8 +36,9 @@ export default function ExplainNotificationPage() {
         }
       );
     } catch (e: any) {
-      setIsLoading(false);
       alert(e.message);
+    } finally {
+      setIsLoading(false);
     }
   };
 
