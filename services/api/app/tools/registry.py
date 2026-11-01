@@ -71,6 +71,35 @@ class ToolRegistry:
             elif tool_name == "datagov_query":
                 source_record = query_datagov(query)
                 url = source_record["url"]
+            elif tool_name in ["news_search", "news_lookup", "web_news"]:
+                from app.tools.news import search_news
+                news_items = search_news(query=query, limit=4)
+                if news_items:
+                    combined_content = "\n\n---\n\n".join([
+                        f"Title: {item['title']}\nSource: {item['publisher']}\nURL: {item['url']}\n\n{item['content']}"
+                        for item in news_items
+                    ])
+                    top_item = news_items[0]
+                    url = top_item["url"]
+                    source_record = {
+                        "url": url,
+                        "publisher": top_item["publisher"],
+                        "source_type": "news",
+                        "title": top_item["title"],
+                        "content": combined_content,
+                        "http_status": 200,
+                        "all_items": news_items
+                    }
+                else:
+                    url = f"https://news.google.com/search?q={query}"
+                    source_record = {
+                        "url": url,
+                        "publisher": "Verified News Wire",
+                        "source_type": "news",
+                        "title": f"Live News Search: {query}",
+                        "content": f"No recent news reports confirmed '{query}'.",
+                        "http_status": 404
+                    }
             else:
                 raise ValueError(f"Unknown tool name: {tool_name}")
 

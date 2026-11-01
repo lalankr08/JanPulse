@@ -24,7 +24,7 @@ class ClaimExtractionResult(BaseModel):
     nudge_message: Optional[str] = Field(None, description="If no checkable claims, a helpful human message explaining what to paste")
 
 class ToolCallPlan(BaseModel):
-    tool: Literal["pib_latest", "pib_search", "myscheme_fetch", "myscheme_candidates", "indiacode_search", "egazette_search", "datagov_query"]
+    tool: Literal["pib_latest", "pib_search", "myscheme_fetch", "myscheme_candidates", "indiacode_search", "egazette_search", "datagov_query", "news_search"]
     query: str = Field(description="Query term for search")
     language: str = Field(default="en", description="Language of query")
     reason: str = Field(description="Why this tool and query were chosen")

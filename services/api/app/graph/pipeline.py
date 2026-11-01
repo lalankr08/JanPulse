@@ -1,4 +1,5 @@
 import json
+import re
 import time
 import uuid
 from typing import AsyncGenerator
@@ -52,9 +53,12 @@ class JanPulsePipeline:
 "{clean_input}"
 
 CRITICAL RULES:
-1. If this message asks about or mentions any genuine government scheme (e.g. PM-KISAN, PM Surya Ghar, Ayushman Bharat, Mudra, PMAY, pension, subsidy, farmer benefits), tax rules, or official acts:
+1. If this message asks about or mentions ANY of the following:
+   - A specific named individual, pilot, officer, doctor, minister, or citizen (e.g. 'Smit Machchhar', 'Captain', etc.)
+   - A real-world event, breaking news, flight incident, accident, attack, or international event
+   - A genuine government scheme (e.g. PM-KISAN, PM Surya Ghar, Ayushman Bharat, Mudra, PMAY, pension, subsidy), tax rules, or official acts:
    -> You MUST set `is_hoax_or_viral_rumor: false` and `verdict_label: "proceed_official_check"` and `hoax_category: "genuine_civic_query"`.
-   Do NOT judge scheme eligibility or details here; let the official retrieval pipeline verify it with live government sources!
+   Do NOT guess or assume it is fake here; let the live retrieval engine search news wires and official archives!
 
 2. ONLY mark `is_hoax_or_viral_rumor: true` and `verdict_label: "contradicted"` if this message is:
    - Personal celebrity or political gossip / relationship rumors (e.g. dating, marriage).
@@ -140,9 +144,7 @@ CRITICAL RULES:
 
                 yield {
                     "type": "final_verdict",
-            "run_id": state.run_id,
-            "is_guest": not state.persist_to_db,
-            "saved_to_cloud": state.persist_to_db,
+                    "run_id": state.run_id,
                     "is_guest": not state.persist_to_db,
                     "saved_to_cloud": state.persist_to_db,
                     "verdicts": [
@@ -439,15 +441,28 @@ Evidence & Operative Clauses (Extracted via Gazette RAG):
             }
 
             # Node 4: Retrieve
-            yield {"type": "step_start", "node": "retrieve", "message": "Querying official portals in parallel..."}
+            yield {"type": "step_start", "node": "retrieve", "message": "Querying official portals and verified news in parallel..."}
             
+            # Supplement with news_search if query relates to real-world incidents or named people
+            planned_tools = [c.tool for c in plan_res.tool_calls]
+            news_triggers = ["flight", "pilot", "stabbed", "copilot", "attacked", "hijack", "accident", "crash", "killed", "arrested", "hospital", "died", "machchar", "machchhar"]
+            is_news = any(k in state.raw_input.lower() for k in news_triggers)
+            if is_news and "news_search" not in planned_tools and state.tool_budget_remaining > 0:
+                from app.llm.schemas import ToolCallPlan
+                plan_res.tool_calls.insert(0, ToolCallPlan(
+                    tool="news_search",
+                    query=state.raw_input,
+                    language="en",
+                    reason="Supplemental live news search for real-world event / incident"
+                ))
+
             for call in plan_res.tool_calls[:min(3, state.tool_budget_remaining)]:
                 state.tool_budget_remaining -= 1
                 source_record = ToolRegistry.execute_tool(
                     tool_name=call.tool,
                     query=call.query,
                     language=state.detected_language,
-                    run_id=state.run_id,
+                    run_id=state.run_id if state.persist_to_db else None,
                     seq=state.seq
                 )
                 state.seq += 1
@@ -461,16 +476,36 @@ Evidence & Operative Clauses (Extracted via Gazette RAG):
                     "http_status": source_record.get("http_status", 200)
                 }
 
-                if source_record.get("db_source_id") and source_record.get("content"):
-                    chunks = index_source_document(
-                        source_id=source_record["db_source_id"],
-                        title=source_record.get("title", ""),
-                        content=source_record["content"],
-                        lang=state.detected_language
-                    )
+                if source_record and source_record.get("content"):
+                    chunks = []
+                    if source_record.get("db_source_id"):
+                        try:
+                            chunks = index_source_document(
+                                source_id=source_record["db_source_id"],
+                                title=source_record.get("title", ""),
+                                content=source_record["content"],
+                                lang=state.detected_language
+                            )
+                        except Exception as idx_err:
+                            print(f"[Pipeline] DB indexing fallback: {idx_err}")
+
+                    # Fallback in-memory chunking (essential for guest sessions)
+                    if not chunks:
+                        raw_blocks = [b.strip() for b in re.split(r"\n\n+|---", source_record["content"]) if len(b.strip()) > 30]
+                        if not raw_blocks:
+                            raw_blocks = [source_record["content"][:1400]]
+                        for r_idx, block_text in enumerate(raw_blocks[:6]):
+                            chunks.append({
+                                "chunk_id": f"chk_mem_{uuid.uuid4().hex[:8]}",
+                                "content": block_text,
+                                "heading": source_record.get("title", "Evidence Record"),
+                                "source_url": source_record.get("url", "https://official.gov.in"),
+                                "publisher": source_record.get("publisher", "Official Source")
+                            })
+
                     for chk in chunks:
-                        chk["source_url"] = source_record["url"]
-                        chk["publisher"] = source_record["publisher"]
+                        chk["source_url"] = source_record.get("url", chk.get("source_url", "https://official.gov.in"))
+                        chk["publisher"] = source_record.get("publisher", chk.get("publisher", "Official Source"))
                         state.retrieved_chunks.append(chk)
                         state.chunks_by_id[chk["chunk_id"]] = chk
 
